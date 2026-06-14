@@ -450,15 +450,22 @@ body.game-paused .combat-dock {
   box-shadow: 0 0 20px rgba(255, 209, 102, 0.2);
 }
 
-.skill-slot-space.ready .skill-ring-ready {
-  stroke: rgba(255, 209, 102, 0.75);
-  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.7));
-}
-
 .skill-slot-space .skill-bind {
   color: #ffd166;
   background: rgba(255, 209, 102, 0.15);
   font-weight: 700;
+}
+
+.skill-slot-space.ready .skill-ring-ready {
+  stroke: rgba(255, 209, 102, 0.85);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 10px rgba(255, 209, 102, 0.75));
+  animation: space-ready-pulse 0.85s ease-in-out infinite;
+}
+
+@keyframes space-ready-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
 }
 
 .skill-cd-sweep {

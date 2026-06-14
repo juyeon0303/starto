@@ -12,7 +12,7 @@ export const CHAMPIONS = [
     range: 52,
     atkRate: 0.85,
     spaceName: "참격",
-    spaceCd: 1.35,
+    spaceRate: 2.8,
     spaceType: "slash",
     skillName: "돌진 베기",
     skillCd: 3.2,
@@ -34,7 +34,7 @@ export const CHAMPIONS = [
     range: 165,
     atkRate: 0.7,
     spaceName: "마력탄",
-    spaceCd: 1.5,
+    spaceRate: 2.5,
     spaceType: "bolt",
     skillName: "불꽃 폭발",
     skillCd: 4,
@@ -56,7 +56,7 @@ export const CHAMPIONS = [
     range: 48,
     atkRate: 1.1,
     spaceName: "급습",
-    spaceCd: 1.25,
+    spaceRate: 3.1,
     spaceType: "stab",
     skillName: "그림자 일격",
     skillCd: 2.8,
@@ -78,7 +78,7 @@ export const CHAMPIONS = [
     range: 50,
     atkRate: 0.75,
     spaceName: "방패치기",
-    spaceCd: 1.6,
+    spaceRate: 1.85,
     spaceType: "bash",
     skillName: "방패 강타",
     skillCd: 5,
@@ -100,7 +100,7 @@ export const CHAMPIONS = [
     range: 210,
     atkRate: 0.95,
     spaceName: "속사",
-    spaceCd: 1.4,
+    spaceRate: 2.7,
     spaceType: "shot",
     skillName: "관통 사격",
     skillCd: 3.5,
@@ -122,7 +122,7 @@ export const CHAMPIONS = [
     range: 150,
     atkRate: 0.8,
     spaceName: "전격",
-    spaceCd: 1.45,
+    spaceRate: 2.5,
     spaceType: "zap",
     skillName: "연쇄 번개",
     skillCd: 4.2,
@@ -304,8 +304,8 @@ export function pickRandom(arr, n) {
 
 export function getWaveComposition(wave) {
   const base = WAVE_COMPOSITIONS[wave - 1] || WAVE_COMPOSITIONS[WAVE_COMPOSITIONS.length - 1];
-  /** 스킬+Space 중심 — 웨이브별 체력 스케일 완만하게 */
-  const scale = 1 + (wave - 1) * 0.085;
+  /** J 연타 기준 — 웨이브별 체력 스케일 */
+  const scale = 1 + (wave - 1) * 0.11;
   return base.map((g) => ({
     type: g.type,
     count: g.count,

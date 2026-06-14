@@ -35,8 +35,8 @@ import {
 
 const SKILL_DMG = 3.8;
 const SKILL2_DMG = 2.4;
-/** Space = 짧은 쿨 “평타”. 뱀서식 자동공격은 끔. */
-const SPACE_DMG = 2.45;
+/** J = 연타 평타. K/L만 쿨 있음. */
+const BASIC_DMG = 1.05;
 const AUTO_ATTACK_ENABLED = false;
 const SKILL_RING_LEN = 226;
 
@@ -83,17 +83,16 @@ export class Game {
 
       this.keys[e.code] = true;
       if (this.state !== "combat") return;
-      if (e.code === "Space") {
+      if (e.code === "KeyJ") {
         e.preventDefault();
-        this.useSkill(0);
         return;
       }
       if (e.repeat) return;
-      if (e.code === "KeyJ") {
+      if (e.code === "KeyK") {
         e.preventDefault();
         this.useSkill(1);
       }
-      if (e.code === "KeyK") {
+      if (e.code === "KeyL") {
         e.preventDefault();
         this.useSkill(2);
       }
@@ -157,7 +156,7 @@ export class Game {
 
     this.showOverlay(
       "챔프 선택",
-      "WASD 이동 · Space 타격 · J / K 스킬",
+      "WASD 이동 · J 연타 · K / L 스킬",
       [grid],
       "champ"
     );
@@ -301,7 +300,7 @@ export class Game {
       maxHp: champ.hp,
       angle: 0,
       atkCd: 0,
-      skillSpaceCd: 0,
+      spaceSwing: 0,
       skillCd: 0,
       skill2Cd: 0,
       radius: 16,
@@ -378,7 +377,7 @@ export class Game {
     this.pendingComposition.forEach((g) => {
       for (let i = 0; i < g.count; i++) {
         this.spawnQueue.push({ type: g.type, at: t, scale: g.scale });
-        t += 0.45;
+        t += 0.4;
       }
     });
 
@@ -417,6 +416,23 @@ export class Game {
     ], "result");
   }
 
+  clampInArena(x, y, radius = 0) {
+    const minX = PAD + radius;
+    const maxX = W - PAD - radius;
+    const minY = PAD + radius;
+    const maxY = H - PAD - radius;
+    return {
+      x: clamp(x, minX, maxX),
+      y: clamp(y, minY, maxY),
+    };
+  }
+
+  clampEnemy(e) {
+    const c = this.clampInArena(e.x, e.y, e.radius);
+    e.x = c.x;
+    e.y = c.y;
+  }
+
   spawnEnemy(type, scale) {
     const def = ENEMIES[type];
     const edge = Math.floor(Math.random() * 4);
@@ -446,7 +462,7 @@ export class Game {
       hp: def.hp * scale,
       maxHp: def.hp * scale,
       speed,
-      damage: def.damage * (1 + (this.wave - 1) * 0.05),
+      damage: def.damage * (1 + (this.wave - 1) * 0.055),
       radius: def.radius,
       color: def.color,
       armor: def.armor || 0,
@@ -459,6 +475,7 @@ export class Game {
       shootCd: 1.2,
       flankSide: Math.random() > 0.5 ? 1 : -1,
     });
+    this.clampEnemy(this.enemies[this.enemies.length - 1]);
     addRing(this, x, y, def.glow || def.color, 50);
   }
 
@@ -585,6 +602,7 @@ export class Game {
           const a = Math.atan2(e.y - y, e.x - x);
           e.x += Math.cos(a) * knock;
           e.y += Math.sin(a) * knock;
+          this.clampEnemy(e);
         }
       }
     });
@@ -623,6 +641,12 @@ export class Game {
     p.atkCd = 1 / (c.atkRate * 0.85);
   }
 
+  spaceInterval() {
+    const rate = this.champion?.spaceRate ?? 2.6;
+    const rush = 1 + (this.waveBuff.skillCdBonus || 0) * 0.5;
+    return 1 / (rate * rush);
+  }
+
   useSkill(slot) {
     if (this.state !== "combat" || !this.player) return;
     const p = this.player;
@@ -630,10 +654,10 @@ export class Game {
     this.resolveSkillAim();
 
     if (slot === 0) {
-      if (p.skillSpaceCd > 0) return;
+      if (p.spaceSwing > 0) return;
       this.castSpace();
-      p.skillSpaceCd = c.spaceCd * this.skillCdMult();
-      addFlash(this, themeFor(c).accent, 0.2);
+      p.spaceSwing = this.spaceInterval();
+      addFlash(this, themeFor(c).accent, 0.1);
       this.flashSkillSlot(0);
     } else if (slot === 1) {
       if (p.skillCd > 0) return;
@@ -671,15 +695,15 @@ export class Game {
     setTimeout(() => this.ui.skillSlots?.[i]?.root?.classList.remove("just-used"), 120);
   }
 
-  spaceDamage() {
-    return this.champion.damage * SPACE_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+  basicDamage() {
+    return this.champion.damage * BASIC_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
   }
 
   castSpace() {
     const p = this.player;
     const c = this.champion;
     const th = themeFor(c);
-    const dmg = this.spaceDamage();
+    const dmg = this.basicDamage();
     const a = p.angle;
 
     switch (c.spaceType) {
@@ -732,9 +756,9 @@ export class Game {
     }
 
     playSpaceVfx(this, c, p, a);
-    spawnBurst(this, p.x + Math.cos(a) * 28, p.y + Math.sin(a) * 28, th.accent, true);
-    addShake(this, c.id === "guardian" ? 10 : 8);
-    addRing(this, p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 20, th.glow, 55);
+    spawnBurst(this, p.x + Math.cos(a) * 28, p.y + Math.sin(a) * 28, th.accent, false);
+    addShake(this, c.id === "guardian" ? 5 : 3);
+    addRing(this, p.x + Math.cos(a) * 20, p.y + Math.sin(a) * 20, th.glow, 38);
   }
 
   castPrimary() {
@@ -873,6 +897,7 @@ export class Game {
           if (d < 200 && d > 1) {
             e.x += ((p.x - e.x) / d) * 55;
             e.y += ((p.y - e.y) / d) * 55;
+            this.clampEnemy(e);
           }
         });
         playSecondaryVfx(this, c, p, a);
@@ -922,6 +947,7 @@ export class Game {
     const p = this.player;
     if (e.stun > 0) {
       e.stun -= dt;
+      this.clampEnemy(e);
       return;
     }
 
@@ -953,6 +979,8 @@ export class Game {
       default:
         this.aiChase(e, p, dt, slow);
     }
+
+    this.clampEnemy(e);
   }
 
   aiChase(e, p, dt, slow = 1) {
@@ -1104,13 +1132,14 @@ export class Game {
     if (mx || my) {
       const len = Math.hypot(mx, my) || 1;
       p.moveAngle = Math.atan2(my, mx);
-      p.x = clamp(p.x + (mx / len) * this.champion.speed * this.speedMult() * dt, PAD, W - PAD);
-      p.y = clamp(p.y + (my / len) * this.champion.speed * this.speedMult() * dt, PAD, H - PAD);
+      p.x = clamp(p.x + (mx / len) * this.champion.speed * this.speedMult() * dt, PAD + p.radius, W - PAD - p.radius);
+      p.y = clamp(p.y + (my / len) * this.champion.speed * this.speedMult() * dt, PAD + p.radius, H - PAD - p.radius);
     }
 
     p.angle = mx || my ? p.moveAngle : Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
     if (this.enemies.length) this.aimAtNearestEnemy();
-    if (p.skillSpaceCd > 0) p.skillSpaceCd -= dt;
+    if (p.spaceSwing > 0) p.spaceSwing -= dt;
+    if (this.keys.KeyJ && p.spaceSwing <= 0) this.useSkill(0);
     if (p.skillCd > 0) p.skillCd -= dt;
     if (p.skill2Cd > 0) p.skill2Cd -= dt;
     if (this.invuln > 0) this.invuln -= dt;
@@ -1244,12 +1273,20 @@ export class Game {
       this.ui.combatHpText.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
     }
 
-    const max0 = c ? c.spaceCd * this.skillCdMult() : 1;
     const max1 = c ? c.skillCd * this.skillCdMult() : 1;
     const max2 = c ? c.skill2Cd * this.skillCdMult() : 1;
-    this.updateSkillSlot(this.ui.skillSlots?.[0], p.skillSpaceCd, max0);
+    this.updateSpaceSlot(this.ui.skillSlots?.[0]);
     this.updateSkillSlot(this.ui.skillSlots?.[1], p.skillCd, max1);
     this.updateSkillSlot(this.ui.skillSlots?.[2], p.skill2Cd, max2);
+  }
+
+  updateSpaceSlot(slot) {
+    if (!slot?.root) return;
+    slot.root.classList.add("ready");
+    slot.root.classList.remove("on-cd");
+    if (slot.sweep) slot.sweep.style.opacity = "0";
+    if (slot.ring) slot.ring.style.opacity = "0";
+    if (slot.num) slot.num.textContent = "";
   }
 
   updateSkillSlot(slot, cd, maxCd) {
@@ -1304,9 +1341,9 @@ export class Game {
     const skills = document.createElement("ul");
     skills.className = "champ-card-skills";
     skills.innerHTML = `
-      <li><kbd>Space</kbd><span>${champ.spaceName}</span></li>
-      <li><kbd>J</kbd><span>${champ.skillName}</span></li>
-      <li><kbd>K</kbd><span>${champ.skill2Name}<small class="skill-hint">${champ.skill2Desc || ""}</small></span></li>
+      <li><kbd>J</kbd><span>${champ.spaceName}</span></li>
+      <li><kbd>K</kbd><span>${champ.skillName}</span></li>
+      <li><kbd>L</kbd><span>${champ.skill2Name}<small class="skill-hint">${champ.skill2Desc || ""}</small></span></li>
     `;
 
     btn.append(art, name, skills);
