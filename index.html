@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>링크 스타또</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="bg-noise"></div>
+  <div class="bg-glow bg-glow-a"></div>
+  <div class="bg-glow bg-glow-b"></div>
+
+  <div id="app">
+    <header>
+      <p class="brand-kicker">링크 스타또 · 5~10분 · 랭크 없음</p>
+      <h1>링크 <span class="title-accent">스타또</span></h1>
+    </header>
+
+    <div id="hud" class="hud-minimal">
+      <div class="hud-block">
+        <span class="label">WAVE</span>
+        <span class="hud-value" id="wave-num">1 / 8</span>
+      </div>
+      <div class="hud-block wide">
+        <span class="label">BRIEFING</span>
+        <span class="hud-value sm muted" id="wave-info">—</span>
+      </div>
+      <div id="run-controls" class="run-controls hidden">
+        <button type="button" id="btn-pause" class="run-btn">⏸ 일시정지</button>
+        <button type="button" id="btn-home" class="run-btn run-btn-ghost">홈</button>
+      </div>
+    </div>
+
+    <div class="play-stack">
+      <div class="canvas-shell">
+        <div class="canvas-frame"></div>
+        <canvas id="game" width="960" height="560"></canvas>
+        <div class="canvas-vignette"></div>
+      </div>
+
+      <div id="combat-ui" class="combat-dock hidden">
+        <div class="combat-dock-hp">
+          <div class="champ-portrait" id="champ-portrait"></div>
+          <div class="combat-hp-body">
+            <div class="combat-hp-track">
+              <div class="combat-hp-fill" id="combat-hp-fill"></div>
+            </div>
+            <span class="combat-hp-text" id="combat-hp-text">100</span>
+          </div>
+        </div>
+        <div class="skill-bar">
+          <div class="skill-slot skill-slot-space" id="skill-slot-0">
+            <div class="skill-icon-wrap">
+              <div class="skill-icon" id="skill-icon-0"></div>
+              <div class="skill-silhouette" id="skill-sil-0"></div>
+              <div class="skill-cd-sweep" id="skill-sweep-0"></div>
+              <svg class="skill-ring-svg" viewBox="0 0 80 80">
+                <circle class="skill-ring-ready" cx="40" cy="40" r="36" />
+                <circle class="skill-ring-cd" id="skill-ring-0" cx="40" cy="40" r="36" />
+              </svg>
+              <span class="skill-cd-num" id="skill-num-0"></span>
+            </div>
+            <div class="skill-meta">
+              <span class="skill-name" id="skill-name-0">타격</span>
+              <span class="skill-bind">Space</span>
+            </div>
+          </div>
+          <div class="skill-slot" id="skill-slot-1">
+            <div class="skill-icon-wrap">
+              <div class="skill-icon" id="skill-icon-1"></div>
+              <div class="skill-silhouette" id="skill-sil-1"></div>
+              <div class="skill-cd-sweep" id="skill-sweep-1"></div>
+              <svg class="skill-ring-svg" viewBox="0 0 80 80">
+                <circle class="skill-ring-ready" cx="40" cy="40" r="36" />
+                <circle class="skill-ring-cd" id="skill-ring-1" cx="40" cy="40" r="36" />
+              </svg>
+              <span class="skill-cd-num" id="skill-num-1"></span>
+            </div>
+            <div class="skill-meta">
+              <span class="skill-name" id="skill-name-1">스킬 J</span>
+              <span class="skill-bind">J</span>
+            </div>
+          </div>
+          <div class="skill-slot" id="skill-slot-2">
+            <div class="skill-icon-wrap">
+              <div class="skill-icon" id="skill-icon-2"></div>
+              <div class="skill-silhouette" id="skill-sil-2"></div>
+              <div class="skill-cd-sweep" id="skill-sweep-2"></div>
+              <svg class="skill-ring-svg" viewBox="0 0 80 80">
+                <circle class="skill-ring-ready" cx="40" cy="40" r="36" />
+                <circle class="skill-ring-cd" id="skill-ring-2" cx="40" cy="40" r="36" />
+              </svg>
+              <span class="skill-cd-num" id="skill-num-2"></span>
+            </div>
+            <div class="skill-meta">
+              <span class="skill-name" id="skill-name-2">스킬 K</span>
+              <span class="skill-bind">K</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="overlay" class="hidden">
+      <div id="overlay-card">
+        <p class="overlay-kicker">링크 스타또</p>
+        <h2 id="overlay-title"></h2>
+        <p id="overlay-desc"></p>
+        <div id="overlay-content"></div>
+      </div>
+    </div>
+
+    <div id="tips">
+      <kbd>WASD</kbd><span>이동</span>
+      <kbd>Space</kbd><span>타격 (짧은 쿨)</span>
+      <kbd>J</kbd><span>스킬</span>
+      <kbd>K</kbd><span>보조</span>
+      <kbd>Esc</kbd><span>일시정지</span>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

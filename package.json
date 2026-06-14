@@ -1,0 +1,16 @@
+{
+  "name": "starto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "링크 스타또 — solo skill arena game",
+  "scripts": {
+    "start": "serve . -l tcp://0.0.0.0:${PORT:-10000}",
+    "dev": "serve . -p 3456"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
+  }
+}
