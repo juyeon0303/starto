@@ -566,13 +566,15 @@ export class Game {
     let speed = def.speed;
     if (this.event?.id === "rage") speed *= 1.1;
 
+    const scaledHp = Math.round(def.hp * scale);
+
     this.enemies.push({
       type,
       pattern: def.pattern,
       x,
       y,
-      hp: def.hp * scale,
-      maxHp: def.hp * scale,
+      hp: scaledHp,
+      maxHp: scaledHp,
       speed,
       damage: def.damage * (1 + (this.wave - 1) * 0.055),
       radius: def.radius,
@@ -732,6 +734,8 @@ export class Game {
     if (dmg <= 0) return;
     if (e.hpTrail == null) e.hpTrail = e.hp / e.maxHp;
     e.hp -= dmg;
+    e.hp = Math.max(0, Math.round(e.hp * 10) / 10);
+    if (e.hp < 0.05) e.hp = 0;
     this.sfx.playHit(isSkill, e.type === "boss");
     addShake(this, isSkill ? (e.type === "boss" ? 5 : 3) : 2);
     const ls = this.waveBuff.lifesteal;
@@ -1528,7 +1532,7 @@ export class Game {
     const hpPct = Math.max(0, p.hp / p.maxHp);
     const hpBody = this.ui.combatUi?.querySelector(".combat-hp-body");
     const hpPctLabel = `${Math.round(hpPct * 100)}%`;
-    const hpText = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+    const hpText = `${Math.ceil(p.hp)} / ${Math.round(p.maxHp)}`;
 
     if (this.ui.combatHpFill && this.hudCache.hpFill !== hpPct) {
       this.hudCache.hpFill = hpPct;

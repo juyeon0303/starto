@@ -846,6 +846,12 @@ function drawParticle(ctx, fx) {
   ctx.globalAlpha = 1;
 }
 
+function formatHpLabel(hp, maxHp) {
+  const cur = Math.max(0, Math.ceil(hp));
+  const max = Math.max(1, Math.round(maxHp));
+  return max > 999 ? `${cur}` : `${cur}/${max}`;
+}
+
 function drawHpBar(ctx, x, y, w, h, pct, color, opts = {}) {
   const glow = opts.glow ?? false;
   const showText = opts.showText ?? false;
@@ -894,7 +900,7 @@ function drawHpBar(ctx, x, y, w, h, pct, color, opts = {}) {
   ctx.shadowBlur = 0;
 
   if (showText && hp != null && maxHp != null) {
-    const label = maxHp > 999 ? `${Math.ceil(hp)}` : `${Math.ceil(hp)}/${maxHp}`;
+    const label = formatHpLabel(hp, maxHp);
     ctx.font = `bold ${barH >= 7 ? 11 : 10}px Syne, Malgun Gothic, sans-serif`;
     ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
