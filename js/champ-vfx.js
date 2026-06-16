@@ -178,14 +178,20 @@ export function playSpaceVfx(game, champ, p, angle) {
   switch (champ.spaceType) {
     case "slash":
       addFx(game, {
-        kind: "slashArc",
+        kind: "shockwave",
         x: p.x,
         y: p.y,
-        angle,
-        r: 58,
-        span: 0.85,
+        r: 64,
         color: t.slash,
         maxT: 0.22,
+      });
+      addFx(game, {
+        kind: "shockwave",
+        x: p.x,
+        y: p.y,
+        r: 44,
+        color: t.glow,
+        maxT: 0.16,
       });
       break;
     case "bash":

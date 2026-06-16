@@ -91,28 +91,28 @@ export function mergeCombatFx(augFx, tempFx) {
   return fx;
 }
 
-/** 웨이브별 회복량 (% + 고정) */
+/** 웨이브별 회복량 (% + 고정) — 고난이도에 맞춰 축소 */
 export function healAmountForWave(wave, maxHp) {
-  const pct = 0.14 + wave * 0.018;
-  const flat = 10 + wave * 3;
-  const raw = maxHp * Math.min(0.38, pct) + flat;
-  return Math.max(12, Math.round(Math.min(maxHp * 0.45, raw)));
+  const pct = 0.08 + wave * 0.01;
+  const flat = 5 + wave * 1.5;
+  const raw = maxHp * Math.min(0.22, pct) + flat;
+  return Math.max(8, Math.round(Math.min(maxHp * 0.28, raw)));
 }
 
 export function lootDropChance(wave, enemyType) {
   if (enemyType === "boss") return 1;
-  let base = 0.1 + wave * 0.012;
-  if (enemyType === "bulwark") base += 0.05;
-  if (wave <= 4) base += 0.06;
-  if (wave >= 7) base += 0.02;
-  return Math.min(0.34, base);
+  let base = 0.075 + wave * 0.009;
+  if (enemyType === "bulwark") base += 0.04;
+  if (wave <= 4) base += 0.04;
+  if (wave >= 7) base += 0.015;
+  return Math.min(0.26, base);
 }
 
 export function rollLootKind(wave, enemyType) {
   if (enemyType === "boss") {
     return Math.random() < 0.45 ? "heal" : "buff";
   }
-  const healBias = wave <= 3 ? 0.55 : wave <= 6 ? 0.42 : 0.35;
+  const healBias = wave <= 3 ? 0.48 : wave <= 6 ? 0.36 : 0.3;
   return Math.random() < healBias ? "heal" : "buff";
 }
 
@@ -170,8 +170,7 @@ export function createBuffPickup(wave) {
 }
 
 export function ambientPickupCount(wave) {
-  if (wave <= 2) return 2;
-  if (wave <= 5) return 2;
-  if (wave <= 7) return 1;
+  if (wave <= 2) return 1;
+  if (wave <= 5) return 1;
   return 0;
 }

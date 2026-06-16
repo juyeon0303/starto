@@ -1,18 +1,25 @@
 export const WAVE_COUNT = 8;
 
+/** 전역 난이도 배율 (약 2배 체감) */
+export const DIFFICULTY = {
+  waveHpGrowth: 0.14,
+  waveDmgGrowth: 0.056,
+  firstBossHpScale: 0.92,
+};
+
 export const CHAMPIONS = [
   {
     id: "blade",
     name: "검사",
     color: "#ff7043",
     glow: "#ffab91",
-    hp: 130,
-    speed: 215,
-    damage: 10,
-    range: 58,
+    hp: 138,
+    speed: 212,
+    damage: 9,
+    range: 64,
     atkRate: 0.85,
-    spaceName: "참격",
-    spaceRate: 3.05,
+    spaceName: "선풍",
+    spaceRate: 2.65,
     spaceType: "slash",
     skillName: "돌진 베기",
     skillCd: 3.2,
@@ -145,9 +152,9 @@ export const ENEMIES = {
     name: "돌진병",
     role: "돌진",
     hint: "돌진 예고 후 직선 돌진",
-    hp: 70,
-    speed: 82,
-    damage: 11,
+    hp: 124,
+    speed: 90,
+    damage: 19,
     radius: 15,
     color: "#ff5252",
     glow: "#ff867c",
@@ -158,9 +165,9 @@ export const ENEMIES = {
     name: "사격수",
     role: "원거리",
     hint: "거리 유지 + 투사체",
-    hp: 48,
-    speed: 84,
-    damage: 8,
+    hp: 84,
+    speed: 90,
+    damage: 14,
     radius: 13,
     color: "#ffb74d",
     glow: "#ffe082",
@@ -171,23 +178,23 @@ export const ENEMIES = {
     name: "중갑대",
     role: "탱커",
     hint: "느리지만 단단함",
-    hp: 128,
-    speed: 54,
-    damage: 10,
+    hp: 224,
+    speed: 58,
+    damage: 17,
     radius: 19,
     color: "#8d6e63",
     glow: "#bcaaa4",
     shape: "hex",
     pattern: "tank",
-    armor: 0.25,
+    armor: 0.28,
   },
   skirmisher: {
     name: "기동대",
     role: "암살",
     hint: "측면 우회 후 급접",
-    hp: 52,
-    speed: 118,
-    damage: 7,
+    hp: 92,
+    speed: 128,
+    damage: 12,
     radius: 12,
     color: "#aed581",
     glow: "#ccff90",
@@ -198,9 +205,9 @@ export const ENEMIES = {
     name: "술사",
     role: "장판",
     hint: "바닥 마법 예고 후 폭발",
-    hp: 56,
-    speed: 70,
-    damage: 12,
+    hp: 98,
+    speed: 76,
+    damage: 21,
     radius: 14,
     color: "#ba68c8",
     glow: "#ea80fc",
@@ -211,21 +218,21 @@ export const ENEMIES = {
     name: "군단장",
     role: "보스",
     hint: "돌진 + 광역 장판",
-    hp: 440,
-    speed: 60,
-    damage: 16,
+    hp: 780,
+    speed: 66,
+    damage: 28,
     radius: 24,
     color: "#ce93d8",
     glow: "#f48fb1",
     shape: "hex",
     pattern: "boss",
-    armor: 0.15,
+    armor: 0.18,
   },
 };
 
 export const WAVE_EVENTS = [
   { id: "calm", name: "평온", desc: "특수 규칙 없음." },
-  { id: "rage", name: "분노", desc: "적 이동 +10%." },
+  { id: "rage", name: "분노", desc: "적 이동 +15%." },
   { id: "fog", name: "안개", desc: "J 사거리 -6%." },
   { id: "surge", name: "마력 surge", desc: "스킬 피해 +15%." },
   { id: "iron", name: "철의 밤", desc: "받는 피해 -12%." },
@@ -233,14 +240,14 @@ export const WAVE_EVENTS = [
 
 /** 웨이브별 편성 (고정 + 변수) */
 export const WAVE_COMPOSITIONS = [
-  [{ type: "skirmisher", count: 2 }, { type: "charger", count: 1 }],
-  [{ type: "archer", count: 1 }, { type: "skirmisher", count: 1 }, { type: "bulwark", count: 1 }],
-  [{ type: "charger", count: 1 }, { type: "skirmisher", count: 2 }],
-  [{ type: "boss", count: 1 }],
-  [{ type: "bulwark", count: 1 }, { type: "caster", count: 1 }, { type: "skirmisher", count: 2 }],
-  [{ type: "archer", count: 2 }, { type: "charger", count: 1 }, { type: "caster", count: 1 }],
-  [{ type: "bulwark", count: 1 }, { type: "charger", count: 2 }, { type: "archer", count: 1 }, { type: "skirmisher", count: 1 }],
-  [{ type: "boss", count: 1 }, { type: "charger", count: 1 }, { type: "caster", count: 1 }],
+  [{ type: "skirmisher", count: 3 }, { type: "charger", count: 1 }],
+  [{ type: "archer", count: 2 }, { type: "skirmisher", count: 1 }, { type: "bulwark", count: 1 }],
+  [{ type: "charger", count: 2 }, { type: "skirmisher", count: 2 }],
+  [{ type: "boss", count: 1 }, { type: "archer", count: 1 }],
+  [{ type: "bulwark", count: 1 }, { type: "caster", count: 2 }, { type: "skirmisher", count: 2 }],
+  [{ type: "archer", count: 2 }, { type: "charger", count: 2 }, { type: "caster", count: 1 }],
+  [{ type: "bulwark", count: 2 }, { type: "charger", count: 2 }, { type: "archer", count: 1 }],
+  [{ type: "boss", count: 1 }, { type: "charger", count: 2 }, { type: "caster", count: 1 }],
 ];
 
 /** 칼바람식 증강 — 웨이브마다 1개 선택, 런 내내 누적 (중복 불가) */
@@ -444,7 +451,7 @@ export function pickRandom(arr, n) {
 export function getWaveComposition(wave) {
   const base = WAVE_COMPOSITIONS[wave - 1] || WAVE_COMPOSITIONS[WAVE_COMPOSITIONS.length - 1];
   /** J 연타 기준 — 웨이브별 체력 스케일 */
-  const scale = 1 + (wave - 1) * 0.08;
+  const scale = 1 + (wave - 1) * DIFFICULTY.waveHpGrowth;
   return base.map((g) => ({
     type: g.type,
     count: g.count,

@@ -1,6 +1,7 @@
 import {
   AUGMENT_TIER_LABEL,
   CHAMPIONS,
+  DIFFICULTY,
   ENEMIES,
   WAVE_COUNT,
   WAVE_EVENTS,
@@ -56,12 +57,12 @@ const SKILL_DMG = 3.8;
 const SKILL2_DMG = 2.4;
 /** J = 연타 평타. K/L만 쿨 있음. */
 const BASIC_DMG = 1.05;
-const MELEE_SLASH_RANGE = 78;
-const MELEE_SLASH_ARC = 0.82;
+const MELEE_SLASH_RANGE = 64;
+const SLASH_AOE_DMG = 0.78;
 const STAB_RANGE = 92;
 const BASH_RADIUS = 58;
-const KITE_START = 220;
-const KITE_MAX_BOOST = 0.22;
+const KITE_START = 195;
+const KITE_MAX_BOOST = 0.28;
 const AUTO_ATTACK_ENABLED = false;
 const SKILL_RING_LEN = 226;
 const ZAP_REACH_BONUS = 62;
@@ -388,7 +389,7 @@ export class Game {
       x: pos.x,
       y: pos.y,
       radius: 14,
-      life: 14 + this.wave * 0.8,
+      life: 11 + this.wave * 0.55,
       bob: Math.random() * Math.PI * 2,
       ...data,
     });
@@ -480,8 +481,8 @@ export class Game {
     if (!p || p.hp <= 0) return 0;
     const missing = p.maxHp - p.hp;
     if (missing <= 0) return 0;
-    const pct = Math.max(0.14, 0.26 - (this.wave - 1) * 0.012);
-    const flat = 12 + this.wave * 3;
+    const pct = Math.max(0.07, 0.13 - (this.wave - 1) * 0.006);
+    const flat = 6 + this.wave * 1.5;
     const amount = Math.min(missing, Math.round(p.maxHp * pct + flat));
     if (amount <= 0) return 0;
     p.hp += amount;
@@ -627,11 +628,11 @@ export class Game {
     this.spawnQueue = [];
     this.spawnTimer = 0;
 
-    let t = 0.4;
+    let t = 0.32;
     this.pendingComposition.forEach((g) => {
       for (let i = 0; i < g.count; i++) {
         this.spawnQueue.push({ type: g.type, at: t, scale: g.scale });
-        t += 0.4;
+        t += 0.32;
       }
     });
 
@@ -709,10 +710,10 @@ export class Game {
     }
 
     let speed = def.speed;
-    if (this.event?.id === "rage") speed *= 1.1;
+    if (this.event?.id === "rage") speed *= 1.15;
 
     let hpScale = scale;
-    if (type === "boss" && this.wave === 4) hpScale *= 0.78;
+    if (type === "boss" && this.wave === 4) hpScale *= DIFFICULTY.firstBossHpScale;
 
     const scaledHp = Math.round(def.hp * hpScale);
 
@@ -724,7 +725,7 @@ export class Game {
       hp: scaledHp,
       maxHp: scaledHp,
       speed,
-      damage: def.damage * (1 + (this.wave - 1) * 0.03),
+      damage: def.damage * (1 + (this.wave - 1) * DIFFICULTY.waveDmgGrowth),
       radius: def.radius,
       color: def.color,
       armor: def.armor || 0,
@@ -1007,6 +1008,9 @@ export class Game {
 
   basicRange() {
     const bonus = 1 + (this.combatFx().rangeBonus || 0);
+    if (this.champion?.spaceType === "slash") {
+      return MELEE_SLASH_RANGE * this.eventFog * bonus;
+    }
     return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
@@ -1026,7 +1030,7 @@ export class Game {
     const type = this.champion?.spaceType ?? "slash";
     switch (type) {
       case "slash":
-        return { kind: "arc", range: MELEE_SLASH_RANGE, arc: MELEE_SLASH_ARC };
+        return { kind: "circle", range: MELEE_SLASH_RANGE, fullSpin: true };
       case "stab":
         return { kind: "circle", range: STAB_RANGE };
       case "bash":
@@ -1050,6 +1054,7 @@ export class Game {
     const v = this.getBasicRangeVisual();
     const r = Math.round(v.range);
     const type = this.champion?.spaceType;
+    if (v.fullSpin) return `근접 360° · ${r}px`;
     if (v.kind === "arc") return `근접 ${r}px`;
     if (v.extra && type === "zap") return `사거리 ${r} · 전격 ${Math.round(v.extra)}px`;
     if (v.extra) return `사거리 ${r} · 최대 ${Math.round(v.extra)}px`;
@@ -1109,17 +1114,20 @@ export class Game {
     this.lastZapTarget = null;
 
     switch (c.spaceType) {
-      case "slash":
+      case "slash": {
+        const r = MELEE_SLASH_RANGE + p.radius * 0.15;
+        let hit = 0;
         this.enemies.forEach((e) => {
-          const ea = Math.atan2(e.y - p.y, e.x - p.x);
-          const diff = Math.abs(normAngle(ea - a));
           const d = Math.hypot(e.x - p.x, e.y - p.y);
-          if (diff < MELEE_SLASH_ARC && d < MELEE_SLASH_RANGE) {
-            this.damageEnemy(e, dmg * (d < MELEE_SLASH_RANGE * 0.55 ? 1.08 : 1), true);
-          }
+          if (d > r + e.radius) return;
+          const falloff = d < r * 0.42 ? 1.05 : 1;
+          this.damageEnemy(e, dmg * SLASH_AOE_DMG * falloff, true);
+          hit += 1;
         });
-        addTrail(this, p.x, p.y, p.x + Math.cos(a) * 50, p.y + Math.sin(a) * 50, th.slash, 6);
+        addRing(this, p.x, p.y, th.glow, r * 2.1);
+        if (hit > 0) addShake(this, Math.min(4, 2 + hit));
         break;
+      }
       case "bolt": {
         if (!near || nearDist > acquireR) break;
         p.angle = Math.atan2(near.y - p.y, near.x - p.x);
@@ -1364,7 +1372,7 @@ export class Game {
     }
 
     p.hp -= amount * this.eventDefense;
-    this.invuln = Math.max(this.invuln, 0.52);
+    this.invuln = Math.max(this.invuln, 0.46);
     this.sfx.playHurt();
     addShake(this, source === "boss" ? 10 : 6);
     addFlash(this, "#ff2d55", 0.45);
@@ -1424,7 +1432,7 @@ export class Game {
     if (e.state === "idle") {
       this.aiChase(e, p, dt, slow * 0.7, chase);
       e.stateT += dt;
-      if (e.stateT > 1.45 && Math.hypot(p.x - e.x, p.y - e.y) < 230) {
+      if (e.stateT > 1.15 && Math.hypot(p.x - e.x, p.y - e.y) < 255) {
         e.state = "windup";
         e.stateT = 0;
         e.chargeAngle = Math.atan2(p.y - e.y, p.x - e.x);
@@ -1460,8 +1468,8 @@ export class Game {
       e.y -= Math.sin(a) * e.speed * slow * chase * dt;
     }
     e.shootCd -= dt;
-    if (e.shootCd <= 0 && d < 290) {
-      e.shootCd = 2.05;
+    if (e.shootCd <= 0 && d < 310) {
+      e.shootCd = 1.65;
       const ang = Math.atan2(p.y - e.y, p.x - e.x);
       this.enemyProjectiles.push({
         x: e.x,
@@ -1489,7 +1497,7 @@ export class Game {
     this.aiChase(e, p, dt, slow * 0.55, chase);
     e.zoneCd -= dt;
     if (e.zoneCd <= 0) {
-      e.zoneCd = 3.2;
+      e.zoneCd = 2.65;
       this.zones.push({
         x: p.x,
         y: p.y,
@@ -1507,7 +1515,7 @@ export class Game {
     if (e.state === "idle") {
       this.aiChase(e, p, dt, slow * 0.5, chase);
     }
-    if (e.state === "idle" && e.stateT > 2.5) {
+    if (e.state === "idle" && e.stateT > 2.1) {
       e.state = "windup";
       e.stateT = 0;
       e.chargeAngle = Math.atan2(p.y - e.y, p.x - e.x);
