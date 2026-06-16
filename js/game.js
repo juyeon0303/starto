@@ -1415,8 +1415,22 @@ export class Game {
     updateVfx(this, this.paused ? 0 : dt);
     if (this.state === "combat" && !this.paused) this.updateCombat(dt);
     if (this.state === "combat" && !this.paused) this.updateHud();
-    this.draw();
+    try {
+      this.draw();
+    } catch (err) {
+      console.error("render error", err);
+      this.resetCanvas();
+    }
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  resetCanvas() {
+    const ctx = this.ctx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.shadowBlur = 0;
+    ctx.setLineDash([]);
   }
 
   draw() {

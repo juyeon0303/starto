@@ -80,7 +80,11 @@ export function beginIsoCircle(ctx, wx, wy, r, lift = 0) {
   return c.depth;
 }
 
-/** @deprecated use beginIsoCircle + fill/stroke + restore */
+export function endIsoCircle(ctx) {
+  ctx.restore();
+}
+
+/** @deprecated use beginIsoCircle + fill/stroke + endIsoCircle */
 export function drawIsoCircle(ctx, wx, wy, r, lift = 0) {
   beginIsoCircle(ctx, wx, wy, r, lift);
 }

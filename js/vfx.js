@@ -14,6 +14,7 @@ import {
   drawGroundShadow,
   drawIsoLine,
   drawIsoCircle,
+  endIsoCircle,
   PLATFORM_DEPTH,
   ISO_SCALE,
 } from "./iso.js";
@@ -141,6 +142,11 @@ export function updateVfx(game, dt) {
 }
 
 export function renderFrame(game, ctx) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
   ctx.clearRect(0, 0, W, H);
 
   const sx = game.shake ? (Math.random() - 0.5) * game.shake * 2.2 : 0;
@@ -170,6 +176,7 @@ export function renderFrame(game, ctx) {
       ctx.shadowBlur = 16;
       drawIsoCircle(ctx, r.x, r.y, r.r, 0);
       ctx.stroke();
+      endIsoCircle(ctx);
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     })
@@ -266,7 +273,14 @@ export function renderFrame(game, ctx) {
   );
 
   layers.sort((a, b) => a.depth - b.depth);
-  layers.forEach((l) => l.draw());
+  layers.forEach((l) => {
+    ctx.save();
+    try {
+      l.draw();
+    } finally {
+      ctx.restore();
+    }
+  });
   drawFx(ctx, game);
 
   game.floatTexts.forEach((f) => {
@@ -464,14 +478,14 @@ function drawTrapIso(ctx, t, time) {
   ctx.fillStyle = "#69f0ae";
   drawIsoCircle(ctx, t.x, t.y, t.r, 0);
   ctx.fill();
-  ctx.restore();
+  endIsoCircle(ctx);
   ctx.globalAlpha = 0.5;
   ctx.strokeStyle = "#69f0ae";
   ctx.setLineDash([6, 6]);
   ctx.lineWidth = 1.5;
   drawIsoCircle(ctx, t.x, t.y, t.r, 0);
   ctx.stroke();
-  ctx.restore();
+  endIsoCircle(ctx);
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
 }
@@ -491,7 +505,7 @@ function drawZoneIso(ctx, z, time) {
     ctx.setLineDash([8, 6]);
     drawIsoCircle(ctx, z.x, z.y, z.r * (0.85 + p * 0.15), 0);
     ctx.stroke();
-    ctx.restore();
+    endIsoCircle(ctx);
     ctx.setLineDash([]);
     ctx.shadowBlur = 0;
   } else if (hostile) {
@@ -499,7 +513,7 @@ function drawZoneIso(ctx, z, time) {
     ctx.fillStyle = "rgba(255, 45, 85, 0.35)";
     drawIsoCircle(ctx, z.x, z.y, z.r, 0);
     ctx.fill();
-    ctx.restore();
+    endIsoCircle(ctx);
   } else {
     ctx.globalAlpha = 0.25;
     ctx.strokeStyle = base;
@@ -508,7 +522,7 @@ function drawZoneIso(ctx, z, time) {
     ctx.shadowBlur = 14;
     drawIsoCircle(ctx, z.x, z.y, z.r, 0);
     ctx.stroke();
-    ctx.restore();
+    endIsoCircle(ctx);
     ctx.shadowBlur = 0;
   }
   ctx.globalAlpha = 1;
