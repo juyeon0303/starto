@@ -170,7 +170,6 @@ export function renderFrame(game, ctx) {
       ctx.shadowBlur = 16;
       drawIsoCircle(ctx, r.x, r.y, r.r, 0);
       ctx.stroke();
-      ctx.restore();
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
     })
@@ -191,12 +190,6 @@ export function renderFrame(game, ctx) {
     push(pr.x, pr.y, 10, () => drawProjectileIso(ctx, pr, false))
   );
 
-  layers.sort((a, b) => a.depth - b.depth);
-  layers.forEach((l) => l.draw());
-  drawFx(ctx, game);
-    push(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
-  );
-
   game.enemies.forEach((e) => {
     const lift = entityLift(e.radius);
     push(e.x, e.y, lift, () => {
@@ -209,8 +202,17 @@ export function renderFrame(game, ctx) {
       ctx.restore();
     });
     push(e.x, e.y, lift + 34, () => {
-      const hp = worldToScreen(e.x, e.y, lift + 34);
-      drawHpBar(ctx, hp.x, hp.y, 42, 5, e.hp / e.maxHp, "#ff6b81");
+      const hp = worldToScreen(e.x, e.y, lift + 36);
+      const pct = e.hp / e.maxHp;
+      if (e.hpTrail == null) e.hpTrail = pct;
+      e.hpTrail += (pct - e.hpTrail) * 0.18;
+      drawHpBar(ctx, hp.x, hp.y, 54, 8, pct, "#ff6b81", {
+        autoColor: true,
+        showText: true,
+        hp: e.hp,
+        maxHp: e.maxHp,
+        trailPct: e.hpTrail,
+      });
     }, 0.01);
   });
 
@@ -227,8 +229,18 @@ export function renderFrame(game, ctx) {
       ctx.restore();
     });
     push(p.x, p.y, lift + 40, () => {
-      const hp = worldToScreen(p.x, p.y, lift + 40);
-      drawHpBar(ctx, hp.x, hp.y, 56, 6, p.hp / p.maxHp, th.accent, true);
+      const hp = worldToScreen(p.x, p.y, lift + 42);
+      const pct = p.hp / p.maxHp;
+      if (p.hpTrail == null) p.hpTrail = pct;
+      p.hpTrail += (pct - p.hpTrail) * 0.22;
+      drawHpBar(ctx, hp.x, hp.y, 68, 9, pct, th.accent, {
+        glow: true,
+        autoColor: true,
+        showText: true,
+        hp: p.hp,
+        maxHp: p.maxHp,
+        trailPct: p.hpTrail,
+      });
     }, 0.02);
   }
 
@@ -249,8 +261,13 @@ export function renderFrame(game, ctx) {
     push(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
   );
 
+  game.projectiles.forEach((pr) =>
+    push(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
+  );
+
   layers.sort((a, b) => a.depth - b.depth);
   layers.forEach((l) => l.draw());
+  drawFx(ctx, game);
 
   game.floatTexts.forEach((f) => {
     const p = worldToScreen(f.x, f.y, entityLift(16) + 20);
@@ -569,12 +586,17 @@ function drawTopBannerIso(ctx, game) {
   ctx.fillStyle = "#c8d6e5";
   ctx.fillText(game.message || "", anchor.x + 10, anchor.y + 21);
 
-  if (game.scoutCounter && game.state === "combat") {
+  if (game.runAugments?.length && game.state === "combat") {
     const right = worldToScreen(W - PAD - 20, PAD + 12, 0);
     ctx.textAlign = "right";
     ctx.fillStyle = "#ffd166";
     ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
-    ctx.fillText(`◆ ${game.scoutCounter.name}`, right.x, right.y + 21);
+    const last = game.runAugments[game.runAugments.length - 1];
+    ctx.fillText(
+      `◆ 증강 ${game.runAugments.length}/${8} · ${last.icon}${last.name}`,
+      right.x,
+      right.y + 21
+    );
     ctx.textAlign = "left";
   }
 }
@@ -660,11 +682,16 @@ function drawTopBanner(ctx, game) {
   ctx.fillStyle = "#c8d6e5";
   ctx.fillText(game.message || "", PAD + 18, PAD + 29);
 
-  if (game.scoutCounter && game.state === "combat") {
+  if (game.runAugments?.length && game.state === "combat") {
     ctx.textAlign = "right";
     ctx.fillStyle = "#ffd166";
     ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
-    ctx.fillText(`◆ ${game.scoutCounter.name}`, W - PAD - 12, PAD + 29);
+    const last = game.runAugments[game.runAugments.length - 1];
+    ctx.fillText(
+      `◆ 증강 ${game.runAugments.length}/8 · ${last.icon}${last.name}`,
+      W - PAD - 12,
+      PAD + 29
+    );
     ctx.textAlign = "left";
   }
 }
@@ -786,18 +813,72 @@ function drawParticle(ctx, fx) {
   ctx.globalAlpha = 1;
 }
 
-function drawHpBar(ctx, x, y, w, h, pct, color, glow = false) {
-  ctx.fillStyle = "rgba(0,0,0,0.55)";
-  ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
-  ctx.fillStyle = "rgba(255,255,255,0.08)";
-  ctx.fillRect(x - w / 2, y, w, h);
-  if (glow) {
-    ctx.shadowColor = color;
-    ctx.shadowBlur = 8;
+function drawHpBar(ctx, x, y, w, h, pct, color, opts = {}) {
+  const glow = opts.glow ?? false;
+  const showText = opts.showText ?? false;
+  const hp = opts.hp;
+  const maxHp = opts.maxHp;
+  const trail = opts.trailPct;
+
+  const barW = w;
+  const barH = h;
+  const left = x - barW / 2;
+  const top = y;
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+  ctx.fillRect(left - 3, top - 3, barW + 6, barH + 6);
+
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(left - 1, top - 1, barW + 2, barH + 2);
+
+  ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.fillRect(left, top, barW, barH);
+
+  if (trail != null && trail > pct) {
+    ctx.fillStyle = "rgba(255, 80, 100, 0.55)";
+    ctx.fillRect(left, top, barW * Math.max(0, trail), barH);
   }
-  ctx.fillStyle = color;
-  ctx.fillRect(x - w / 2, y, w * Math.max(0, pct), h);
+
+  let fill = color;
+  if (opts.autoColor) {
+    if (pct <= 0.25) fill = "#ff1744";
+    else if (pct <= 0.5) fill = "#ff9100";
+    else if (pct <= 0.75) fill = "#ffca28";
+    else fill = glow ? color : "#69f0ae";
+  }
+
+  if (glow) {
+    ctx.shadowColor = fill;
+    ctx.shadowBlur = 12;
+  }
+
+  const grad = ctx.createLinearGradient(left, top, left + barW, top);
+  grad.addColorStop(0, fill);
+  grad.addColorStop(1, glow ? fill : shadeHex(fill, 30));
+  ctx.fillStyle = grad;
+  ctx.fillRect(left, top, barW * Math.max(0, pct), barH);
   ctx.shadowBlur = 0;
+
+  if (showText && hp != null && maxHp != null) {
+    const label = maxHp > 999 ? `${Math.ceil(hp)}` : `${Math.ceil(hp)}/${maxHp}`;
+    ctx.font = `bold ${barH >= 7 ? 11 : 10}px Syne, Malgun Gothic, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+    ctx.fillText(label, x + 1, top - 4);
+    ctx.fillStyle = pct <= 0.3 ? "#ffcdd2" : "#fff";
+    ctx.fillText(label, x, top - 5);
+    ctx.textAlign = "left";
+  }
+}
+
+function shadeHex(hex, amt) {
+  if (!hex.startsWith("#")) return hex;
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+  const b = Math.max(0, Math.min(255, (n & 255) + amt));
+  return `rgb(${r},${g},${b})`;
 }
 
 export function addTrail(game, x1, y1, x2, y2, color, width = 3) {

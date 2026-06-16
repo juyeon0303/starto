@@ -16,7 +16,7 @@ export const CHAMPIONS = [
     spaceType: "slash",
     skillName: "돌진 베기",
     skillCd: 3.2,
-    skillDesc: "돌진 + 경로 적에게 큰 피해.",
+    skillDesc: "돌진 + 경로 적에게 큰 피해. (거리 145)",
     skillType: "dash",
     skill2Name: "제압",
     skill2Cd: 5,
@@ -40,7 +40,7 @@ export const CHAMPIONS = [
     spaceHomingTurn: 9,
     skillName: "불꽃 폭발",
     skillCd: 4,
-    skillDesc: "주변 전체 피해.",
+    skillDesc: "주변 광역 폭발. (범위 넓음)",
     skillType: "nova",
     skill2Name: "관통 화염",
     skill2Cd: 2.2,
@@ -62,11 +62,11 @@ export const CHAMPIONS = [
     spaceType: "stab",
     skillName: "그림자 일격",
     skillCd: 2.8,
-    skillDesc: "가장 가까운 적 순간 접근.",
+    skillDesc: "가장 가까운 적에게 순간 접근 + 급소.",
     skillType: "blink",
     skill2Name: "연막",
     skill2Cd: 4.5,
-    skill2Desc: "0.6초 무적 + 앞으로 도약 (회피).",
+    skill2Desc: "0.75초 무적 + 앞으로 도약 (회피).",
     skill2Type: "smoke",
   },
   {
@@ -88,7 +88,7 @@ export const CHAMPIONS = [
     skillType: "slam",
     skill2Name: "도발",
     skill2Cd: 3.5,
-    skill2Desc: "적을 자신 쪽으로 끌어당김.",
+    skill2Desc: "적 끌어당김 + 짧은 기절.",
     skill2Type: "taunt",
   },
   {
@@ -107,7 +107,7 @@ export const CHAMPIONS = [
     spaceHoming: false,
     skillName: "관통 사격",
     skillCd: 3.5,
-    skillDesc: "관통 화살.",
+    skillDesc: "관통 화살. (속도↑)",
     skillType: "pierce",
     skill2Name: "속박 덫",
     skill2Cd: 4,
@@ -130,11 +130,11 @@ export const CHAMPIONS = [
     spaceZapMult: 1.0,
     skillName: "연쇄 번개",
     skillCd: 4.2,
-    skillDesc: "4명 연쇄.",
+    skillDesc: "5명 연쇄 번개.",
     skillType: "chain",
     skill2Name: "전기 장판",
     skill2Cd: 3,
-    skill2Desc: "전방 전기 장판.",
+    skill2Desc: "전방 전기 장판. (지속↑)",
     skill2Type: "field",
   },
 ];
@@ -243,58 +243,193 @@ export const WAVE_COMPOSITIONS = [
   [{ type: "boss", count: 1 }, { type: "charger", count: 1 }, { type: "caster", count: 1 }],
 ];
 
-/** 스카웃 — 대응 카운터 */
-export const COUNTERS = [
+/** 칼바람식 증강 — 웨이브마다 1개 선택, 런 내내 누적 (중복 불가) */
+export const AUGMENTS = [
   {
     id: "brace",
+    tier: "gold",
+    icon: "🛡",
     name: "방어 태세",
-    desc: "돌진/보스 피해 35% 감소.",
+    desc: "돌진·보스 피격 시 받는 피해 감소.",
     vs: ["charger", "boss"],
-    fx: { chargeReduce: 0.35 },
+    fx: { chargeReduce: 0.22 },
   },
   {
     id: "pierce",
+    tier: "gold",
+    icon: "⚔",
     name: "장갑 관통",
-    desc: "중갑·보스에게 피해 +40%.",
+    desc: "중갑·보스에게 가하는 피해 증가.",
     vs: ["bulwark", "boss"],
-    fx: { armorBonus: 0.4 },
+    fx: { armorBonus: 0.28 },
   },
   {
     id: "evade",
+    tier: "silver",
+    icon: "🏹",
     name: "회피 집중",
-    desc: "적 투사체 피해 55% 감소.",
+    desc: "적 투사체 피해 감소.",
     vs: ["archer"],
-    fx: { projReduce: 0.55 },
+    fx: { projReduce: 0.32 },
   },
   {
     id: "purge",
+    tier: "gold",
+    icon: "✨",
     name: "정화의 손",
-    desc: "장판 피해 60% 감소.",
+    desc: "장판·폭발 피해 감소.",
     vs: ["caster", "boss"],
-    fx: { zoneReduce: 0.6 },
+    fx: { zoneReduce: 0.35 },
   },
   {
     id: "hunt",
+    tier: "gold",
+    icon: "🎯",
     name: "사냥 본능",
-    desc: "기동대·사격수에게 피해 +30%.",
+    desc: "기동대·사격수 처치 속도 UP.",
     vs: ["skirmisher", "archer"],
-    fx: { huntBonus: 0.3 },
+    fx: { huntBonus: 0.22 },
   },
   {
     id: "focus",
+    tier: "gold",
+    icon: "🔮",
     name: "스킬 집중",
-    desc: "이번 웨이브 스킬 피해 +25%.",
+    desc: "K/L 스킬 피해 증가.",
     vs: ["*"],
-    fx: { skillBonus: 0.25 },
+    fx: { skillBonus: 0.16 },
   },
   {
     id: "rush",
+    tier: "prismatic",
+    icon: "⚡",
     name: "전술 가속",
-    desc: "이동속도 +18%, 스킬 쿨 -12%.",
+    desc: "이동 + 스킬 쿨 단축.",
     vs: ["*"],
-    fx: { speedBonus: 0.18, skillCdBonus: 0.12 },
+    fx: { speedBonus: 0.1, skillCdBonus: 0.07 },
+  },
+  {
+    id: "vitality",
+    tier: "silver",
+    icon: "❤",
+    name: "생명력 강화",
+    desc: "최대 체력 즉시 증가 (누적).",
+    vs: ["*"],
+    fx: { hpBonus: 22 },
+  },
+  {
+    id: "scope",
+    tier: "silver",
+    icon: "👁",
+    name: "사거리 확장",
+    desc: "J 평타·조준 사거리 증가.",
+    vs: ["archer", "caster"],
+    fx: { rangeBonus: 0.1 },
+  },
+  {
+    id: "vamp",
+    tier: "gold",
+    icon: "🩸",
+    name: "흡혈",
+    desc: "가한 피해의 일부 회복.",
+    vs: ["*"],
+    fx: { lifesteal: 0.06 },
+  },
+  {
+    id: "edge",
+    tier: "gold",
+    icon: "🗡",
+    name: "날카로운 J",
+    desc: "J 연타 피해 증가.",
+    vs: ["*"],
+    fx: { basicBonus: 0.14 },
+  },
+  {
+    id: "prism",
+    tier: "prismatic",
+    icon: "💎",
+    name: "프리즘 폭발",
+    desc: "스킬 + J 피해 대폭 증가.",
+    vs: ["*"],
+    fx: { skillBonus: 0.2, basicBonus: 0.1 },
+  },
+  {
+    id: "bulwark",
+    tier: "gold",
+    icon: "🔰",
+    name: "철벽",
+    desc: "돌진·투사체 피해 동시 감소.",
+    vs: ["charger", "archer", "boss"],
+    fx: { chargeReduce: 0.12, projReduce: 0.18 },
   },
 ];
+
+/** @deprecated — use AUGMENTS */
+export const COUNTERS = AUGMENTS;
+
+export const AUGMENT_TIER_LABEL = {
+  silver: "실버",
+  gold: "골드",
+  prismatic: "프리즘",
+};
+
+const FX_CAPS = {
+  chargeReduce: 0.72,
+  armorBonus: 1,
+  projReduce: 0.78,
+  zoneReduce: 0.78,
+  huntBonus: 0.85,
+  skillBonus: 0.9,
+  speedBonus: 0.45,
+  skillCdBonus: 0.38,
+  basicBonus: 0.55,
+  rangeBonus: 0.35,
+  lifesteal: 0.25,
+};
+
+const FX_STAT_LABEL = {
+  chargeReduce: (v) => `돌진·보스 피해 −${Math.round(v * 100)}%`,
+  armorBonus: (v) => `중갑·보스 피해 +${Math.round(v * 100)}%`,
+  projReduce: (v) => `투사체 피해 −${Math.round(v * 100)}%`,
+  zoneReduce: (v) => `장판 피해 −${Math.round(v * 100)}%`,
+  huntBonus: (v) => `기동·원거리 피해 +${Math.round(v * 100)}%`,
+  skillBonus: (v) => `스킬 피해 +${Math.round(v * 100)}%`,
+  speedBonus: (v) => `이동속도 +${Math.round(v * 100)}%`,
+  skillCdBonus: (v) => `스킬 쿨 −${Math.round(v * 100)}%`,
+  basicBonus: (v) => `J 피해 +${Math.round(v * 100)}%`,
+  rangeBonus: (v) => `사거리 +${Math.round(v * 100)}%`,
+  lifesteal: (v) => `흡혈 ${Math.round(v * 100)}%`,
+  hpBonus: (v) => `최대 HP +${Math.round(v)}`,
+};
+
+export function mergeAugmentFx(augments) {
+  const fx = {};
+  for (const aug of augments) {
+    for (const [k, v] of Object.entries(aug.fx || {})) {
+      if (k === "hpBonus") continue;
+      fx[k] = (fx[k] || 0) + v;
+    }
+  }
+  for (const [k, cap] of Object.entries(FX_CAPS)) {
+    if (fx[k] != null) fx[k] = Math.min(cap, fx[k]);
+  }
+  return fx;
+}
+
+export function formatAugmentStats(fx) {
+  return Object.entries(fx || {})
+    .map(([k, v]) => FX_STAT_LABEL[k]?.(v))
+    .filter(Boolean);
+}
+
+export function isAugmentRecommended(aug, enemyTypes) {
+  if (aug.vs.includes("*")) return false;
+  return aug.vs.some((t) => enemyTypes.has(t));
+}
+
+export function augmentMatchesWave(aug, enemyTypes) {
+  return aug.vs.includes("*") || aug.vs.some((t) => enemyTypes.has(t));
+}
 
 export function pickRandom(arr, n) {
   const copy = [...arr];
@@ -326,18 +461,45 @@ export function summarizeComposition(groups) {
   return parts.join(" · ");
 }
 
-export function getScoutCounters(groups) {
+export function getScoutAugments(groups, pickedIds = [], wave = 1) {
   const types = new Set(groups.map((g) => g.type));
-  const matched = COUNTERS.filter(
-    (c) => c.vs.includes("*") || c.vs.some((t) => types.has(t))
-  );
-  const picked = pickRandom(matched, Math.min(3, matched.length));
-  while (picked.length < 3) {
-    const extra = COUNTERS.find((c) => !picked.includes(c));
-    if (!extra) break;
-    picked.push(extra);
+  const taken = new Set(pickedIds);
+  let pool = AUGMENTS.filter((c) => !taken.has(c.id) && augmentMatchesWave(c, types));
+  if (pool.length < 3) {
+    pool = AUGMENTS.filter((c) => !taken.has(c.id));
   }
-  return picked.slice(0, 3);
+
+  const tierWeight = (aug) => {
+    let w = 1;
+    if (aug.tier === "prismatic" && wave >= 5) w += 1.4;
+    if (aug.tier === "prismatic" && wave < 4) w *= 0.35;
+    if (aug.tier === "silver" && wave <= 2) w += 0.8;
+    if (isAugmentRecommended(aug, types)) w += 1.2;
+    return w;
+  };
+
+  const weighted = [];
+  pool.forEach((aug) => {
+    const n = Math.max(1, Math.round(tierWeight(aug) * 2));
+    for (let i = 0; i < n; i++) weighted.push(aug);
+  });
+
+  const out = [];
+  const used = new Set();
+  while (out.length < 3 && weighted.length) {
+    const i = Math.floor(Math.random() * weighted.length);
+    const cand = weighted[i];
+    weighted.splice(i, 1);
+    if (used.has(cand.id)) continue;
+    used.add(cand.id);
+    out.push(cand);
+  }
+  return out;
+}
+
+/** @deprecated */
+export function getScoutCounters(groups) {
+  return getScoutAugments(groups, [], 1);
 }
 
 export function compositionRoles(groups) {

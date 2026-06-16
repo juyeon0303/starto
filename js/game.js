@@ -1,11 +1,15 @@
 import {
+  AUGMENT_TIER_LABEL,
   CHAMPIONS,
   ENEMIES,
   WAVE_COUNT,
   WAVE_EVENTS,
   compositionRoles,
-  getScoutCounters,
+  formatAugmentStats,
+  getScoutAugments,
   getWaveComposition,
+  isAugmentRecommended,
+  mergeAugmentFx,
   pickRandom,
   summarizeComposition,
 } from "./data.js";
@@ -26,6 +30,7 @@ import {
 } from "./vfx.js";
 import { mountSilhouette } from "./silhouettes.js";
 import { createGameAudio } from "./audio.js";
+import { createGameSfx } from "./sfx.js";
 import { updateEnemyFacing } from "./enemy-art.js";
 import {
   addFx,
@@ -68,7 +73,8 @@ export class Game {
     this.spawnQueue = [];
     this.spawnTimer = 0;
     this.pendingComposition = null;
-    this.scoutCounter = null;
+    this.runAugments = [];
+    this.scoutAugmentOptions = null;
     this.waveBuff = {};
     this.keys = {};
     this.mouse = { x: W / 2, y: H / 2 };
@@ -80,6 +86,7 @@ export class Game {
     this.lastTime = 0;
     this.paused = false;
     this.audio = createGameAudio();
+    this.sfx = createGameSfx();
     initVfx(this);
 
     window.addEventListener("keydown", (e) => {
@@ -179,12 +186,15 @@ export class Game {
     this.champion = { ...champ };
     this.wave = 0;
     this.paused = false;
+    this.runAugments = [];
+    this.waveBuff = {};
     this.player = this.makePlayer(champ);
     initVfx(this);
     this.setupSkillUi(champ);
     this.setMenuMode(false);
     this.setRunControlsVisible(true);
     this.hideOverlay();
+    this.sfx.ensure();
     this.audio.play();
     this.prepareWave();
   }
@@ -221,7 +231,7 @@ export class Game {
     const desc =
       this.state === "combat"
         ? `웨이브 ${this.wave} · ${this.champion?.name || ""}`
-        : "대응 선택 중";
+        : "증강 선택 중";
 
     this.showOverlay("일시정지", desc, [wrap], "pause");
   }
@@ -308,6 +318,30 @@ export class Game {
     document.body.classList.toggle("combat-active", show);
     if (!this.ui.combatUi) return;
     this.ui.combatUi.classList.toggle("hidden", !show);
+    this.ui.augmentStrip?.classList.toggle("hidden", !show);
+  }
+
+  recomputeWaveBuff() {
+    this.waveBuff = mergeAugmentFx(this.runAugments);
+  }
+
+  applyAugmentInstant(aug) {
+    const bonus = aug.fx?.hpBonus;
+    if (!bonus || !this.player) return;
+    this.player.maxHp += bonus;
+    this.player.hp += bonus;
+    if (this.player.hpTrail != null) {
+      this.player.hpTrail = this.player.hp / this.player.maxHp;
+    }
+  }
+
+  pickAugment(aug) {
+    if (!aug || this.runAugments.some((a) => a.id === aug.id)) return;
+    this.runAugments.push(aug);
+    this.applyAugmentInstant(aug);
+    this.recomputeWaveBuff();
+    this.sfx.playSkill("primary");
+    addFlash(this, aug.tier === "prismatic" ? "#e040fb" : "#ffd166", 0.2);
   }
 
   makePlayer(champ) {
@@ -323,6 +357,7 @@ export class Game {
       skill2Cd: 0,
       radius: 16,
       moveAngle: 0,
+      hpTrail: 1,
     };
   }
 
@@ -335,28 +370,62 @@ export class Game {
     this.eventSkill = this.event.id === "surge" ? 1.15 : 1;
     this.eventDefense = this.event.id === "iron" ? 0.88 : 1;
     this.eventFog = this.event.id === "fog" ? 0.9 : 1;
-    this.scoutCounterOptions = getScoutCounters(this.pendingComposition);
+    this.scoutAugmentOptions = getScoutAugments(
+      this.pendingComposition,
+      this.runAugments.map((a) => a.id),
+      this.wave
+    );
     this.showScoutOverlay();
   }
 
   showScoutOverlay() {
     const roles = compositionRoles(this.pendingComposition);
-    const counters = this.scoutCounterOptions || [];
+    const options = this.scoutAugmentOptions || [];
     const summary = summarizeComposition(this.pendingComposition);
+    const enemyTypes = new Set(this.pendingComposition.map((g) => g.type));
+    const stackN = this.runAugments.length;
 
     const content = document.createElement("div");
-    content.className = "scout-panel";
+    content.className = "scout-panel aug-draft";
+
+    const build = document.createElement("div");
+    build.className = "aug-build-panel";
+    build.innerHTML = `
+      <div class="aug-build-head">
+        <span class="aug-build-title">내 빌드</span>
+        <span class="aug-stack-badge">누적 ${stackN} / ${WAVE_COUNT}</span>
+      </div>
+      <p class="aug-stack-rule">웨이브마다 증강 1개 · <strong>런 내내 누적</strong> · 중복 불가</p>
+    `;
+    const chips = document.createElement("div");
+    chips.className = "aug-build-chips";
+    for (let i = 0; i < WAVE_COUNT; i++) {
+      const aug = this.runAugments[i];
+      const chip = document.createElement("span");
+      chip.className = aug
+        ? `aug-chip aug-tier-${aug.tier}`
+        : "aug-chip aug-chip-empty";
+      if (aug) {
+        chip.title = `${aug.name}\n${formatAugmentStats(aug.fx).join("\n")}`;
+        chip.innerHTML = `<span class="aug-chip-icon">${aug.icon}</span><span class="aug-chip-name">${aug.name}</span>`;
+      } else {
+        chip.textContent = `${i + 1}`;
+      }
+      chips.appendChild(chip);
+    }
+    build.appendChild(chips);
+    content.appendChild(build);
 
     const intel = document.createElement("div");
-    intel.className = "scout-intel";
+    intel.className = "scout-intel aug-intel-compact";
     intel.innerHTML = `
       <p><strong>웨이브 ${this.wave}</strong> · ${this.event.name} — ${this.event.desc}</p>
-      <p class="squad-line">적 편성: ${summary}</p>
-      <ul class="role-list">
+      <p class="squad-line">적: ${summary}</p>
+      <ul class="role-list role-list-compact">
         ${roles
           .map(
             (r) =>
-              `<li><span class="dot" style="background:${r.color}"></span>${r.name} ×${r.count} <em>(${r.role})</em> — ${r.hint}</li>`
+              `<li><span class="dot" style="background:${r.color}"></span>${r.name} ×${r.count} <em>${r.role}</em></li>`
           )
           .join("")}
       </ul>
@@ -364,20 +433,25 @@ export class Game {
     content.appendChild(intel);
 
     const picks = document.createElement("div");
-    picks.className = "scout-picks";
-    counters.forEach((c) => {
-      const btn = this.makePickBtn(c.name, c.desc, () => {
-        this.scoutCounter = c;
-        this.waveBuff = { ...c.fx };
-        this.hideOverlay();
-        this.beginCombat();
-      }, "#00d4ff", "#ffd166");
-      picks.appendChild(btn);
+    picks.className = "aug-card-row";
+    options.forEach((aug) => {
+      picks.appendChild(
+        this.makeAugmentCard(aug, () => {
+          this.pickAugment(aug);
+          this.hideOverlay();
+          this.beginCombat();
+        }, isAugmentRecommended(aug, enemyTypes))
+      );
     });
     content.appendChild(picks);
 
-    this.showOverlay("대응 선택", "다음 적 편성 확인. 하나만 고르면 바로 시작.", [content], "scout");
-    this.message = `웨이브 ${this.wave} — 대응 고르기`;
+    this.showOverlay(
+      "증강 선택",
+      "칼바람처럼 3장 중 1장. 고른 증강은 이번 판 끝까지 쌓입니다.",
+      [content],
+      "scout"
+    );
+    this.message = `웨이브 ${this.wave} — 증강 ${stackN + 1}/${WAVE_COUNT}`;
     this.updateHud();
   }
 
@@ -399,7 +473,7 @@ export class Game {
       }
     });
 
-    this.message = `웨이브 ${this.wave} · ${this.scoutCounter?.name || ""}`;
+    this.message = `웨이브 ${this.wave} · 증강 ${this.runAugments.length}/${WAVE_COUNT}`;
     this.setCombatUiVisible(true);
     this.updateHud();
   }
@@ -496,6 +570,7 @@ export class Game {
       flankSide: Math.random() > 0.5 ? 1 : -1,
       anim: Math.random() * Math.PI * 2,
       faceAngle: Math.random() * Math.PI * 2,
+      hpTrail: 1,
     });
     this.clampEnemy(this.enemies[this.enemies.length - 1]);
     addRing(this, x, y, def.glow || def.color, 50);
@@ -608,12 +683,21 @@ export class Game {
 
   damageEnemy(e, amount, isSkill = false) {
     const dmg = isSkill ? this.dmgVsEnemy(e, amount) : amount * (1 - (e.armor || 0) * 0.5);
+    if (dmg <= 0) return;
+    if (e.hpTrail == null) e.hpTrail = e.hp / e.maxHp;
     e.hp -= dmg;
+    this.sfx.playHit(isSkill, e.type === "boss");
+    addShake(this, isSkill ? (e.type === "boss" ? 5 : 3) : 2);
+    const ls = this.waveBuff.lifesteal;
+    if (ls && this.player?.hp > 0) {
+      this.player.hp = Math.min(this.player.maxHp, this.player.hp + dmg * ls);
+    }
     if (isSkill) {
       const th = themeFor(this.champion);
-      addFloatText(this, e.x, e.y, String(Math.round(dmg)), th.glow, 13);
-      spawnBurst(this, e.x, e.y, th.color, false);
+      addFloatText(this, e.x, e.y, String(Math.round(dmg)), th.glow, isSkill ? 14 : 12);
+      spawnBurst(this, e.x, e.y, th.color, e.type === "boss");
     } else {
+      addFloatText(this, e.x, e.y, String(Math.round(dmg)), "#ffe082", 11);
       spawnBurst(this, e.x, e.y, "#fff", false);
     }
   }
@@ -679,18 +763,21 @@ export class Game {
 
     if (slot === 0) {
       if (p.spaceSwing > 0) return;
+      this.sfx.playSwing(this.champion?.spaceType);
       this.castSpace();
       p.spaceSwing = this.spaceInterval();
       addFlash(this, themeFor(c).accent, 0.1);
       this.flashSkillSlot(0);
     } else if (slot === 1) {
       if (p.skillCd > 0) return;
+      this.sfx.playSkill("primary");
       this.castPrimary();
       p.skillCd = c.skillCd * this.skillCdMult();
       addFlash(this, themeFor(c).glow, 0.14);
       this.flashSkillSlot(1);
     } else {
       if (p.skill2Cd > 0) return;
+      this.sfx.playSkill("secondary");
       this.castSecondary();
       p.skill2Cd = c.skill2Cd * this.skillCdMult();
       addFlash(this, themeFor(c).color, 0.1);
@@ -720,11 +807,16 @@ export class Game {
   }
 
   basicRange() {
-    return (this.champion?.range ?? 60) * this.eventFog;
+    const bonus = 1 + (this.waveBuff.rangeBonus || 0);
+    return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
   basicDamage(dist = 0) {
-    let dmg = this.champion.damage * BASIC_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+    let dmg =
+      this.champion.damage *
+      BASIC_DMG *
+      this.eventSkill *
+      (1 + (this.waveBuff.skillBonus || 0) + (this.waveBuff.basicBonus || 0));
     const type = this.champion.spaceType;
     if (type === "bolt" || type === "shot" || type === "zap") {
       dmg *= this.rangedFalloff(dist);
@@ -847,7 +939,7 @@ export class Game {
 
     switch (c.skillType) {
       case "dash": {
-        const dist = 130 * this.eventFog;
+        const dist = 145 * this.eventFog;
         const nx = clamp(p.x + Math.cos(p.angle) * dist, PAD, W - PAD);
         const ny = clamp(p.y + Math.sin(p.angle) * dist, PAD, H - PAD);
         addTrail(this, p.x, p.y, nx, ny, th.slash, 8);
@@ -864,19 +956,19 @@ export class Game {
         break;
       }
       case "nova":
-        this.dealDamage(dmg, p.x, p.y, 120 * this.eventFog, 35);
+        this.dealDamage(dmg, p.x, p.y, 132 * this.eventFog, 35);
         spawnBurst(this, p.x, p.y, th.glow, true);
         addShake(this, 6);
         addFlash(this, th.color, 0.28);
         playPrimaryVfx(this, c, p);
         break;
       case "blink": {
-        const t = this.nearestEnemy(300);
+        const t = this.nearestEnemy(360);
         if (t) {
           playPrimaryVfx(this, c, p);
           p.x = t.x + (p.x - t.x) * 0.2;
           p.y = t.y + (p.y - t.y) * 0.2;
-          this.damageEnemy(t, dmg * 1.3, true);
+          this.damageEnemy(t, dmg * 1.35, true);
           spawnBurst(this, p.x, p.y, th.glow, true);
         }
         break;
@@ -892,7 +984,7 @@ export class Game {
         playPrimaryVfx(this, c, p);
         break;
       case "pierce":
-        this.pushFriendlyProjectile(p.x, p.y, p.angle, 540, {
+        this.pushFriendlyProjectile(p.x, p.y, p.angle, 580, {
           slot: "primary",
           damage: dmg,
           life: 1.2,
@@ -905,7 +997,7 @@ export class Game {
         let cur = this.nearestEnemy(9999);
         let lx = p.x,
           ly = p.y;
-        for (let i = 0; i < 4 && cur; i++) {
+        for (let i = 0; i < 5 && cur; i++) {
           addFx(this, {
             kind: "lightning",
             x1: lx,
@@ -959,8 +1051,8 @@ export class Game {
         });
         break;
       case "smoke":
-        this.invuln = 0.65;
-        this.smokeTimer = 0.75;
+        this.invuln = 0.75;
+        this.smokeTimer = 0.85;
         p.x = clamp(p.x + Math.cos(a) * 72, PAD, W - PAD);
         p.y = clamp(p.y + Math.sin(a) * 72, PAD, H - PAD);
         spawnBurst(this, p.x, p.y, "#546e7a", true);
@@ -975,6 +1067,7 @@ export class Game {
           if (d < 200 && d > 1) {
             e.x += ((p.x - e.x) / d) * 55;
             e.y += ((p.y - e.y) / d) * 55;
+            e.stun = Math.max(e.stun, 0.45);
             this.clampEnemy(e);
           }
         });
@@ -990,10 +1083,10 @@ export class Game {
           x: p.x + Math.cos(a) * 90,
           y: p.y + Math.sin(a) * 90,
           r: 55,
-          t: 2.5,
+          t: 3.2,
           tick: 0.35,
           friendly: true,
-          damage: dmg * 0.45,
+          damage: dmg * 0.52,
         });
         playSecondaryVfx(this, c, p, a);
         break;
@@ -1016,8 +1109,9 @@ export class Game {
 
     p.hp -= amount * this.eventDefense;
     this.invuln = Math.max(this.invuln, 0.45);
-    addShake(this, source === "boss" ? 8 : 4);
-    addFlash(this, "#ff2d55", 0.4);
+    this.sfx.playHurt();
+    addShake(this, source === "boss" ? 10 : 6);
+    addFlash(this, "#ff2d55", 0.45);
     if (p.hp <= 0) this.lose();
   }
 
@@ -1294,6 +1388,7 @@ export class Game {
       const e = this.enemies[i];
       if (e.hp <= 0) {
         const def = ENEMIES[e.type];
+        this.sfx.playKill();
         spawnBurst(this, e.x, e.y, def?.glow || e.color, e.type === "boss");
         if (e.type === "boss") addShake(this, 6);
         this.enemies.splice(i, 1);
@@ -1336,8 +1431,9 @@ export class Game {
       parts.push(`다음 ${summarizeComposition(this.pendingComposition)}`);
     }
     if (this.event) parts.push(this.event.name);
-    if (this.scoutCounter && this.state === "combat") {
-      parts.push(`대응 ${this.scoutCounter.name}`);
+    if (this.runAugments.length) {
+      const names = this.runAugments.map((a) => a.name).join(" · ");
+      parts.push(`증강 ${this.runAugments.length}/${WAVE_COUNT}: ${names}`);
     }
     if (this.champion && this.state === "combat") {
       parts.push(this.champion.name);
@@ -1348,14 +1444,30 @@ export class Game {
 
     const p = this.player;
     const c = this.champion;
-    const hpPct = p.hp / p.maxHp;
+    const hpPct = Math.max(0, p.hp / p.maxHp);
+    const hpBody = this.ui.combatUi?.querySelector(".combat-hp-body");
 
     if (this.ui.combatHpFill) {
       this.ui.combatHpFill.style.width = `${hpPct * 100}%`;
     }
+    if (this.ui.combatHpTrail) {
+      if (p.hpTrail == null) p.hpTrail = hpPct;
+      p.hpTrail += (hpPct - p.hpTrail) * 0.2;
+      this.ui.combatHpTrail.style.width = `${p.hpTrail * 100}%`;
+    }
     if (this.ui.combatHpText) {
       this.ui.combatHpText.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
     }
+    if (this.ui.combatHpPct) {
+      this.ui.combatHpPct.textContent = `${Math.round(hpPct * 100)}%`;
+    }
+    if (hpBody) {
+      hpBody.classList.toggle("hp-danger", hpPct <= 0.25);
+      hpBody.classList.toggle("hp-warn", hpPct > 0.25 && hpPct <= 0.5);
+      hpBody.classList.toggle("hp-ok", hpPct > 0.5);
+    }
+
+    this.updateAugmentStrip();
 
     const max1 = c ? c.skillCd * this.skillCdMult() : 1;
     const max2 = c ? c.skill2Cd * this.skillCdMult() : 1;
@@ -1433,6 +1545,53 @@ export class Game {
     btn.append(art, name, skills);
     btn.onclick = fn;
     return btn;
+  }
+
+  updateAugmentStrip() {
+    const strip = this.ui.augmentStrip;
+    const chipsEl = this.ui.augmentChips;
+    const countEl = this.ui.augmentCount;
+    if (!strip || !chipsEl) return;
+
+    const show = this.state === "combat" && this.runAugments.length > 0;
+    strip.classList.toggle("hidden", !show);
+    if (!show) return;
+
+    if (countEl) {
+      countEl.textContent = `${this.runAugments.length} / ${WAVE_COUNT}`;
+    }
+
+    chipsEl.innerHTML = "";
+    this.runAugments.forEach((aug) => {
+      const chip = document.createElement("span");
+      chip.className = `aug-chip-sm aug-tier-${aug.tier}`;
+      chip.title = `${aug.name}\n${formatAugmentStats(aug.fx).join("\n")}`;
+      chip.innerHTML = `<span>${aug.icon}</span> ${aug.name}`;
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  makeAugmentCard(aug, fn, recommended = false) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `aug-card aug-tier-${aug.tier}`;
+    const tierLabel = AUGMENT_TIER_LABEL[aug.tier] || aug.tier;
+    const stats = formatAugmentStats(aug.fx)
+      .map((s) => `<li>${s}</li>`)
+      .join("");
+
+    card.innerHTML = `
+      <div class="aug-card-frame"></div>
+      <span class="aug-tier-pill">${tierLabel}</span>
+      ${recommended ? '<span class="aug-rec-pill">추천</span>' : ""}
+      <div class="aug-card-icon">${aug.icon}</div>
+      <strong class="aug-card-name">${aug.name}</strong>
+      <p class="aug-card-desc">${aug.desc}</p>
+      <ul class="aug-card-stats">${stats}</ul>
+      <span class="aug-card-foot">런 내내 누적</span>
+    `;
+    card.onclick = fn;
+    return card;
   }
 
   makePickBtn(title, desc, fn, accent = "#00d4ff", glow = "#00d4ff", champId = null) {

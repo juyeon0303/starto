@@ -35,6 +35,12 @@
       </div>
     </div>
 
+    <div id="augment-strip" class="augment-strip hidden">
+      <span class="aug-strip-label">증강 빌드</span>
+      <div id="augment-chips" class="aug-strip-chips"></div>
+      <span id="aug-count" class="aug-strip-count">0 / 8</span>
+    </div>
+
     <div class="play-stack">
       <div class="canvas-shell">
         <div class="canvas-frame"></div>
@@ -45,11 +51,16 @@
       <div id="combat-ui" class="combat-dock hidden">
         <div class="combat-dock-hp">
           <div class="champ-portrait" id="champ-portrait"></div>
-          <div class="combat-hp-body">
+          <div class="combat-hp-body hp-ok">
+            <div class="combat-hp-head">
+              <span class="combat-hp-label">HP</span>
+              <span class="combat-hp-pct" id="combat-hp-pct">100%</span>
+            </div>
             <div class="combat-hp-track">
               <div class="combat-hp-fill" id="combat-hp-fill"></div>
+              <div class="combat-hp-trail" id="combat-hp-trail"></div>
             </div>
-            <span class="combat-hp-text" id="combat-hp-text">100</span>
+            <span class="combat-hp-text" id="combat-hp-text">100 / 100</span>
           </div>
         </div>
         <div class="skill-bar">
