@@ -609,7 +609,20 @@ body.game-paused .combat-dock {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 96px;
+  max-width: 110px;
+}
+
+.skill-range {
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: rgba(255, 224, 130, 0.9);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.skill-slot-space .skill-range {
+  color: rgba(255, 224, 130, 0.98);
 }
 
 .skill-bind {

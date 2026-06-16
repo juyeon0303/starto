@@ -861,6 +861,32 @@ export class Game {
     return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
+  getBasicRangeVisual() {
+    const range = this.basicRange();
+    const type = this.champion?.spaceType ?? "slash";
+    switch (type) {
+      case "slash":
+        return { kind: "arc", range: MELEE_SLASH_RANGE, arc: MELEE_SLASH_ARC };
+      case "stab":
+        return { kind: "circle", range: STAB_RANGE };
+      case "bash":
+        return { kind: "circle", range: BASH_RADIUS };
+      case "zap":
+        return { kind: "circle", range, extra: range + ZAP_REACH_BONUS };
+      default:
+        return { kind: "circle", range, sweetSpot: range * 0.72 };
+    }
+  }
+
+  basicRangeLabel() {
+    const v = this.getBasicRangeVisual();
+    const r = Math.round(v.range);
+    if (v.kind === "arc") return `근접 ${r}px`;
+    if (v.extra) return `사거리 ${r} · 전격 ${Math.round(v.extra)}px`;
+    if (v.sweetSpot) return `사거리 ${r}px (풀딜 ${Math.round(v.sweetSpot)}px)`;
+    return `사거리 ${r}px`;
+  }
+
   basicDamage(dist = 0) {
     let dmg =
       this.champion.damage *
@@ -1588,6 +1614,13 @@ export class Game {
     if (slot.sweep) slot.sweep.style.opacity = "0";
     if (slot.ring) slot.ring.style.opacity = "0";
     if (slot.num) slot.num.textContent = "";
+    if (slot.range) {
+      const label = this.basicRangeLabel();
+      if (this.hudCache.basicRange !== label) {
+        this.hudCache.basicRange = label;
+        slot.range.textContent = label;
+      }
+    }
   }
 
   updateSkillSlot(slot, cd, maxCd) {

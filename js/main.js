@@ -11,6 +11,7 @@ function skillSlot(id) {
     ring: document.getElementById(`skill-ring-${id}`),
     num: document.getElementById(`skill-num-${id}`),
     name: document.getElementById(`skill-name-${id}`),
+    range: document.getElementById(`skill-range-${id}`),
   };
 }
 

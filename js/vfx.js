@@ -177,6 +177,9 @@ export function renderFrame(game, ctx) {
   drawArenaBg(ctx, game.bgTime, game.event?.id);
   drawIsoPlatform(ctx, game.bgTime);
   drawAmbientParticlesIso(ctx, game);
+  if (game.state === "combat" && game.player) {
+    drawBasicRangeIndicator(ctx, game);
+  }
 
   const layers = [];
   const push = (wx, wy, lift, draw, bias = 0) => {
@@ -325,6 +328,110 @@ export function renderFrame(game, ctx) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
+}
+
+function drawBasicRangeIndicator(ctx, game) {
+  const p = game.player;
+  const champ = game.champion;
+  if (!p || !champ || typeof game.getBasicRangeVisual !== "function") return;
+
+  const visual = game.getBasicRangeVisual();
+  const th = themeFor(champ);
+  const held = !!game.keys?.KeyJ;
+  const pulse = 0.58 + Math.sin(game.bgTime * 3.2) * 0.14;
+  const alpha = (held ? 0.62 : 0.34) * pulse;
+
+  ctx.save();
+  ctx.setLineDash([8, 7]);
+  ctx.lineWidth = held ? 2.4 : 1.8;
+  ctx.strokeStyle = th.glow;
+  ctx.fillStyle = `${th.glow}22`;
+
+  if (visual.kind === "arc") {
+    ctx.globalAlpha = alpha;
+    drawWorldArcZone(ctx, p.x, p.y, p.angle, visual.range, visual.arc, true);
+  } else {
+    strokeIsoRangeRing(ctx, p.x, p.y, visual.range, alpha);
+    if (visual.sweetSpot) {
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.setLineDash([4, 8]);
+      strokeIsoRangeRing(ctx, p.x, p.y, visual.sweetSpot, alpha * 0.45);
+      ctx.setLineDash([8, 7]);
+    }
+    if (visual.extra) {
+      ctx.globalAlpha = alpha * 0.38;
+      ctx.setLineDash([5, 9]);
+      strokeIsoRangeRing(ctx, p.x, p.y, visual.extra, alpha * 0.38);
+    }
+  }
+
+  ctx.globalAlpha = alpha * 0.85;
+  ctx.setLineDash([]);
+  ctx.lineWidth = held ? 2 : 1.5;
+  const aimLift = entityLift(p.radius) * 0.35;
+  const from = worldToScreen(p.x, p.y, aimLift);
+  const tipR = visual.kind === "arc" ? visual.range * 0.82 : visual.range;
+  const tip = worldToScreen(
+    p.x + Math.cos(p.angle) * tipR,
+    p.y + Math.sin(p.angle) * tipR,
+    aimLift
+  );
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+
+  const label = game.basicRangeLabel?.() ?? "";
+  if (label) {
+    const tag = worldToScreen(
+      p.x + Math.cos(p.angle) * visual.range * 0.62,
+      p.y + Math.sin(p.angle) * visual.range * 0.62,
+      aimLift + 8
+    );
+    ctx.font = "700 10px Syne, Malgun Gothic, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+    ctx.fillText("J", tag.x + 1, tag.y + 1);
+    ctx.fillStyle = held ? th.glow : "rgba(255, 255, 255, 0.88)";
+    ctx.fillText("J", tag.x, tag.y);
+    ctx.textAlign = "left";
+  }
+
+  ctx.restore();
+}
+
+function strokeIsoRangeRing(ctx, wx, wy, radius, alpha) {
+  ctx.globalAlpha = alpha;
+  drawIsoCircle(ctx, wx, wy, radius, 0);
+  ctx.stroke();
+  endIsoCircle(ctx);
+}
+
+function drawWorldArcZone(ctx, wx, wy, angle, radius, span, fill = false) {
+  const steps = 28;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = angle - span + ((span * 2) * i) / steps;
+    const px = wx + Math.cos(t) * radius;
+    const py = wy + Math.sin(t) * radius;
+    const s = worldToScreen(px, py, 2);
+    if (i === 0) ctx.moveTo(s.x, s.y);
+    else ctx.lineTo(s.x, s.y);
+  }
+  const c = worldToScreen(wx, wy, 2);
+  ctx.lineTo(c.x, c.y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.y);
+  const left = worldToScreen(wx + Math.cos(angle - span) * radius, wy + Math.sin(angle - span) * radius, 2);
+  ctx.lineTo(left.x, left.y);
+  ctx.moveTo(c.x, c.y);
+  const right = worldToScreen(wx + Math.cos(angle + span) * radius, wy + Math.sin(angle + span) * radius, 2);
+  ctx.lineTo(right.x, right.y);
+  ctx.stroke();
 }
 
 function drawArenaBg(ctx, time, eventId) {
