@@ -20,6 +20,7 @@ import {
   H,
   initVfx,
   updateVfx,
+  clearTransientVfx,
   renderFrame,
   spawnBurst,
   addShake,
@@ -528,6 +529,7 @@ export class Game {
   prepareWave() {
     this.wave += 1;
     this.state = "scout";
+    clearTransientVfx(this);
     this.setCombatUiVisible(false);
     this.pendingComposition = getWaveComposition(this.wave);
     this.event = pickRandom(WAVE_EVENTS, 1)[0];
@@ -626,6 +628,7 @@ export class Game {
 
   beginCombat() {
     this.state = "combat";
+    clearTransientVfx(this);
     this.enemies = [];
     this.projectiles = [];
     this.enemyProjectiles = [];
@@ -1759,9 +1762,12 @@ export class Game {
     const frameDt = Math.min(0.05, (now - this.lastTime) / 1000 || 0);
     this.lastTime = now;
 
-    if (this.paused || this.state !== "combat") {
+    if (this.paused) {
       this.accumulator = 0;
       updateVfx(this, 0);
+    } else if (this.state !== "combat") {
+      this.accumulator = 0;
+      updateVfx(this, frameDt);
     } else {
       this.accumulator = (this.accumulator || 0) + frameDt;
       let steps = 0;

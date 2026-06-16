@@ -109,6 +109,15 @@ export function spawnBurst(game, x, y, color, big = false) {
   }
 }
 
+export function clearTransientVfx(game) {
+  game.fx = [];
+  game.particles = [];
+  game.rings = [];
+  game.sparks = [];
+  game.trails = [];
+  game.flash = 0;
+}
+
 export function updateVfx(game, dt) {
   game.bgTime += dt;
   game.shake *= 0.86;
@@ -252,7 +261,7 @@ export function renderFrame(game, ctx) {
     }, 0.01);
   });
 
-  if (game.player) {
+  if (game.player && game.state === "combat") {
     const p = game.player;
     const th = themeFor(game.champion);
     const lift = entityLift(p.radius);

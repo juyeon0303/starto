@@ -793,6 +793,7 @@ function drawChampBody(ctx, champId, time, ghost = false) {
 }
 
 function drawChampWeapons(ctx, champId, time, color, glow) {
+  ctx.save();
   switch (champId) {
     case "blade":
       drawSword(ctx, { glow, accent: color, scale: 1 });
@@ -836,6 +837,9 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
     default:
       drawSword(ctx, { glow, accent: color, scale: 0.9 });
   }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
 export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
@@ -864,6 +868,9 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   ctx.restore();
 
   drawChampHead(ctx, id, t.color, t.glow);
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
 
   if (invuln > 0) {
     ctx.strokeStyle = id === "guardian" ? t.glow : "#ffd166";
