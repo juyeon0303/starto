@@ -84,19 +84,19 @@ export function mergeCombatFx(augFx, tempFx) {
 
 /** 웨이브별 회복량 (% + 고정) */
 export function healAmountForWave(wave, maxHp) {
-  const pct = 0.11 + wave * 0.017;
-  const flat = 6 + wave * 2.5;
-  const raw = maxHp * Math.min(0.34, pct) + flat;
-  return Math.max(8, Math.round(Math.min(maxHp * 0.4, raw)));
+  const pct = 0.14 + wave * 0.018;
+  const flat = 10 + wave * 3;
+  const raw = maxHp * Math.min(0.38, pct) + flat;
+  return Math.max(12, Math.round(Math.min(maxHp * 0.45, raw)));
 }
 
 export function lootDropChance(wave, enemyType) {
   if (enemyType === "boss") return 1;
-  let base = 0.07 + wave * 0.011;
-  if (enemyType === "bulwark") base += 0.04;
-  if (wave <= 2) base += 0.03;
+  let base = 0.1 + wave * 0.012;
+  if (enemyType === "bulwark") base += 0.05;
+  if (wave <= 4) base += 0.06;
   if (wave >= 7) base += 0.02;
-  return Math.min(0.28, base);
+  return Math.min(0.34, base);
 }
 
 export function rollLootKind(wave, enemyType) {
@@ -159,6 +159,7 @@ export function createBuffPickup(wave) {
 
 export function ambientPickupCount(wave) {
   if (wave <= 2) return 2;
-  if (wave <= 5) return 1;
+  if (wave <= 5) return 2;
+  if (wave <= 7) return 1;
   return 0;
 }

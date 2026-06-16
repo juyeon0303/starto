@@ -222,6 +222,7 @@ export class Game {
     this.waveBuff = {};
     this.waveTempBuff = {};
     this.pickups = [];
+    this.lastWaveClearHeal = 0;
     this.invalidateCombatFx();
     this.player = this.makePlayer(champ);
     initVfx(this);
@@ -472,6 +473,21 @@ export class Game {
     }
   }
 
+  /** 웨이브 클리어 시 체력 일부 회복 — 누적 피해 완화 */
+  applyWaveClearHeal() {
+    const p = this.player;
+    if (!p || p.hp <= 0) return 0;
+    const missing = p.maxHp - p.hp;
+    if (missing <= 0) return 0;
+    const pct = Math.max(0.14, 0.26 - (this.wave - 1) * 0.012);
+    const flat = 12 + this.wave * 3;
+    const amount = Math.min(missing, Math.round(p.maxHp * pct + flat));
+    if (amount <= 0) return 0;
+    p.hp += amount;
+    if (p.hpTrail != null) p.hpTrail = p.hp / p.maxHp;
+    return amount;
+  }
+
   pickAugment(aug) {
     if (!aug || this.runAugments.some((a) => a.id === aug.id)) return;
     this.runAugments.push(aug);
@@ -555,8 +571,13 @@ export class Game {
 
     const intel = document.createElement("div");
     intel.className = "scout-intel aug-intel-compact";
+    const clearHeal =
+      this.lastWaveClearHeal > 0
+        ? `<p class="wave-clear-heal">웨이브 클리어 회복 <strong>+${this.lastWaveClearHeal} HP</strong></p>`
+        : "";
     intel.innerHTML = `
       <p><strong>웨이브 ${this.wave}</strong> · ${this.event.name} — ${this.event.desc}</p>
+      ${clearHeal}
       <p class="squad-line">적: ${summary}</p>
       <ul class="role-list role-list-compact">
         ${roles
@@ -689,7 +710,10 @@ export class Game {
     let speed = def.speed;
     if (this.event?.id === "rage") speed *= 1.1;
 
-    const scaledHp = Math.round(def.hp * scale);
+    let hpScale = scale;
+    if (type === "boss" && this.wave === 4) hpScale *= 0.78;
+
+    const scaledHp = Math.round(def.hp * hpScale);
 
     this.enemies.push({
       type,
@@ -699,7 +723,7 @@ export class Game {
       hp: scaledHp,
       maxHp: scaledHp,
       speed,
-      damage: def.damage * (1 + (this.wave - 1) * 0.055),
+      damage: def.damage * (1 + (this.wave - 1) * 0.036),
       radius: def.radius,
       color: def.color,
       armor: def.armor || 0,
@@ -1311,7 +1335,7 @@ export class Game {
     }
 
     p.hp -= amount * this.eventDefense;
-    this.invuln = Math.max(this.invuln, 0.45);
+    this.invuln = Math.max(this.invuln, 0.52);
     this.sfx.playHurt();
     addShake(this, source === "boss" ? 10 : 6);
     addFlash(this, "#ff2d55", 0.45);
@@ -1387,7 +1411,7 @@ export class Game {
       e.y += Math.sin(e.chargeAngle) * e.speed * 2.8 * dt;
       e.stateT += dt;
       if (Math.hypot(e.x - p.x, e.y - p.y) < e.radius + p.radius + 4) {
-        this.hurtPlayer(e.damage * 1.1, "charge");
+        this.hurtPlayer(e.damage * 1.02, "charge");
       }
       if (e.stateT > 0.45) {
         e.state = "idle";
@@ -1469,7 +1493,7 @@ export class Game {
       e.y += Math.sin(e.chargeAngle) * e.speed * 2.2 * dt;
       e.stateT += dt;
       if (Math.hypot(e.x - p.x, e.y - p.y) < e.radius + p.radius + 6) {
-        this.hurtPlayer(e.damage * 1.1, "boss");
+        this.hurtPlayer(e.damage * 1.03, "boss");
       }
       if (e.stateT > 0.55) {
         e.state = "idle";
@@ -1500,6 +1524,7 @@ export class Game {
   }
 
   updateCombat(dt) {
+    if (this.state !== "combat") return;
     const p = this.player;
     if (!p) return;
 
@@ -1610,8 +1635,13 @@ export class Game {
     });
 
     if (!this.spawnQueue.length && this.enemies.length === 0 && this.spawnTimer > 1.5) {
-      if (this.wave >= WAVE_COUNT) this.win();
-      else this.prepareWave();
+      if (this.wave >= WAVE_COUNT) {
+        this.win();
+        return;
+      }
+      this.lastWaveClearHeal = this.applyWaveClearHeal();
+      this.prepareWave();
+      return;
     }
   }
 
@@ -1627,6 +1657,7 @@ export class Game {
       this.accumulator = (this.accumulator || 0) + frameDt;
       let steps = 0;
       while (this.accumulator >= SIM_STEP && steps < MAX_SIM_STEPS) {
+        if (this.paused || this.state !== "combat") break;
         updateVfx(this, SIM_STEP);
         this.updateCombat(SIM_STEP);
         this.accumulator -= SIM_STEP;

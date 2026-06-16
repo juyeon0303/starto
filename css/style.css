@@ -1138,6 +1138,11 @@ body.menu-open .bg-glow-b {
   margin-bottom: 14px;
 }
 
+.scout-intel .wave-clear-heal {
+  color: #69f0ae;
+  margin-top: 0.35rem;
+}
+
 .scout-intel p {
   margin-bottom: 8px;
   line-height: 1.5;

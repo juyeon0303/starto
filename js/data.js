@@ -28,7 +28,7 @@ export const CHAMPIONS = [
     name: "마법사",
     color: "#7e57c2",
     glow: "#b388ff",
-    hp: 82,
+    hp: 92,
     speed: 188,
     damage: 7,
     range: 118,
@@ -96,7 +96,7 @@ export const CHAMPIONS = [
     name: "궁수",
     color: "#66bb6a",
     glow: "#b9f6ca",
-    hp: 86,
+    hp: 96,
     speed: 196,
     damage: 6,
     range: 132,
@@ -119,7 +119,7 @@ export const CHAMPIONS = [
     name: "뇌술사",
     color: "#42a5f5",
     glow: "#82b1ff",
-    hp: 84,
+    hp: 94,
     speed: 190,
     damage: 7,
     range: 118,
@@ -235,8 +235,8 @@ export const WAVE_EVENTS = [
 export const WAVE_COMPOSITIONS = [
   [{ type: "skirmisher", count: 2 }, { type: "charger", count: 1 }],
   [{ type: "archer", count: 2 }, { type: "bulwark", count: 1 }],
-  [{ type: "charger", count: 2 }, { type: "skirmisher", count: 1 }],
-  [{ type: "boss", count: 1 }, { type: "archer", count: 1 }],
+  [{ type: "charger", count: 1 }, { type: "skirmisher", count: 2 }],
+  [{ type: "boss", count: 1 }],
   [{ type: "bulwark", count: 1 }, { type: "caster", count: 1 }, { type: "skirmisher", count: 2 }],
   [{ type: "archer", count: 2 }, { type: "charger", count: 1 }, { type: "caster", count: 1 }],
   [{ type: "bulwark", count: 1 }, { type: "charger", count: 2 }, { type: "archer", count: 1 }, { type: "skirmisher", count: 1 }],
@@ -444,7 +444,7 @@ export function pickRandom(arr, n) {
 export function getWaveComposition(wave) {
   const base = WAVE_COMPOSITIONS[wave - 1] || WAVE_COMPOSITIONS[WAVE_COMPOSITIONS.length - 1];
   /** J 연타 기준 — 웨이브별 체력 스케일 */
-  const scale = 1 + (wave - 1) * 0.11;
+  const scale = 1 + (wave - 1) * 0.088;
   return base.map((g) => ({
     type: g.type,
     count: g.count,
