@@ -1,9 +1,10 @@
-/** 전투 BGM — Swordland 계열 보스전 오케스트라 (MP3 우선) */
+/** 전투 BGM — CC0 battle-loop.mp3 우선, 없으면 긴장감 Web Audio 폴백 */
 const BGM_CANDIDATES = [
+  "assets/audio/battle-loop.mp3",
   "assets/audio/swordland.mp3",
   "assets/audio/sao-battle.mp3",
 ];
-const BGM_VOLUME = 0.44;
+const BGM_VOLUME = 0.5;
 
 export function createGameAudio() {
   return new GameAudio();
@@ -90,7 +91,7 @@ class GameAudio {
     this.stopFallback();
   }
 
-  /** 스타버스트/최종보스전 느낌 — 느린 현·타이мпani·상승 멜로디 */
+  /** 긴장감 — 빠른 펄스 베이스 + 단조 아르페지오 + 타격 */
   startFallback() {
     if (this.fallbackNodes) return;
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -101,134 +102,134 @@ class GameAudio {
     master.gain.value = BGM_VOLUME;
     master.connect(this.ctx.destination);
 
-    const reverb = this.ctx.createBiquadFilter();
-    reverb.type = "lowpass";
-    reverb.frequency.value = 2800;
-    reverb.connect(master);
+    const bus = this.ctx.createBiquadFilter();
+    bus.type = "lowpass";
+    bus.frequency.value = 4200;
+    bus.connect(master);
 
-    const padRoot = 146.83;
-    const motif = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 293.66];
-    const beat = 60 / 76;
+    const beat = 60 / 132;
+    const arp = [220, 261.63, 311.13, 349.23, 415.3, 349.23, 293.66, 246.94];
     let step = 0;
-    let nextAt = this.ctx.currentTime + 0.08;
+    let nextAt = this.ctx.currentTime + 0.05;
 
-    this.playStringPad(reverb, padRoot, this.ctx.currentTime, 9999);
+    this.startTensionDrone(bus, this.ctx.currentTime);
 
     const schedule = () => {
       if (!this.fallbackNodes || !this.wanted) return;
-      while (nextAt < this.ctx.currentTime + 0.35) {
-        if (step % 8 === 0) this.playTimpani(reverb, nextAt);
-        if (step % 4 === 0) this.playLowBrass(reverb, padRoot * 1.5, nextAt, beat * 3.2);
-        if (step % 2 === 0) {
-          const n = motif[Math.floor(step / 2) % motif.length];
-          this.playStringLead(reverb, n, nextAt, beat * 1.6);
+      while (nextAt < this.ctx.currentTime + 0.3) {
+        if (step % 2 === 0) this.playPulseKick(bus, nextAt);
+        if (step % 4 === 2) this.playSnare(bus, nextAt);
+        if (step % 2 === 1) {
+          this.playArp(bus, arp[(step / 2) % arp.length], nextAt, beat * 0.9);
         }
-        if (step % 16 === 12) this.playChoirHit(reverb, [392, 493.88, 587.33], nextAt);
+        if (step % 8 === 0) this.playStab(bus, [174.61, 207.65, 261.63], nextAt);
+        if (step % 16 === 12) this.playRiser(bus, nextAt, beat * 4);
         step += 1;
-        nextAt += beat;
+        nextAt += beat * 0.5;
       }
-      this.fallbackTimer = setTimeout(schedule, 100);
+      this.fallbackTimer = setTimeout(schedule, 70);
     };
 
-    this.fallbackNodes = { master, reverb };
+    this.fallbackNodes = { master, bus };
     this.active = true;
     schedule();
   }
 
-  playStringPad(dest, root, when, dur) {
-    [1, 1.25, 1.5, 2].forEach((mul, i) => {
+  startTensionDrone(dest, when) {
+    [1, 1.5, 2].forEach((mul, i) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = "sawtooth";
-      osc.frequency.value = root * mul;
-      const lfo = this.ctx.createOscillator();
-      const lfoGain = this.ctx.createGain();
-      lfo.frequency.value = 4.5 + i * 0.3;
-      lfoGain.gain.value = 1.2;
-      lfo.connect(lfoGain);
-      lfoGain.connect(osc.frequency);
+      osc.frequency.value = 110 * mul;
       const filter = this.ctx.createBiquadFilter();
       filter.type = "lowpass";
-      filter.frequency.value = 520;
+      filter.frequency.value = 280 + i * 40;
       gain.gain.setValueAtTime(0.0001, when);
-      gain.gain.linearRampToValueAtTime(0.028 - i * 0.004, when + 1.2);
-      gain.gain.setValueAtTime(0.022 - i * 0.003, when + dur - 0.5);
+      gain.gain.linearRampToValueAtTime(0.035 - i * 0.008, when + 1.5);
+      gain.gain.setValueAtTime(0.028 - i * 0.006, when + 8000);
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(dest);
       osc.start(when);
-      lfo.start(when);
-      osc.stop(when + dur);
-      lfo.stop(when + dur);
+      osc.stop(when + 9000);
     });
   }
 
-  playStringLead(dest, freq, when, dur) {
+  playPulseKick(dest, when) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.value = freq;
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.setValueAtTime(900, when);
-    filter.frequency.linearRampToValueAtTime(2400, when + dur * 0.4);
-    filter.frequency.linearRampToValueAtTime(700, when + dur);
-    gain.gain.setValueAtTime(0.0001, when);
-    gain.gain.linearRampToValueAtTime(0.09, when + 0.06);
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-    osc.connect(filter);
-    filter.connect(gain);
+    osc.frequency.setValueAtTime(120, when);
+    osc.frequency.exponentialRampToValueAtTime(42, when + 0.1);
+    gain.gain.setValueAtTime(0.38, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.12);
+    osc.connect(gain);
     gain.connect(dest);
     osc.start(when);
-    osc.stop(when + dur + 0.05);
+    osc.stop(when + 0.14);
   }
 
-  playLowBrass(dest, freq, when, dur) {
+  playSnare(dest, when) {
+    const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 0.07, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.12, when);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.07);
+    src.connect(gain);
+    gain.connect(dest);
+    src.start(when);
+  }
+
+  playArp(dest, freq, when, dur) {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = "square";
     osc.frequency.value = freq;
     const filter = this.ctx.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = 420;
+    filter.type = "bandpass";
+    filter.frequency.value = freq * 2;
+    filter.Q.value = 8;
     gain.gain.setValueAtTime(0.0001, when);
-    gain.gain.linearRampToValueAtTime(0.055, when + 0.12);
+    gain.gain.linearRampToValueAtTime(0.07, when + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(dest);
     osc.start(when);
-    osc.stop(when + dur);
+    osc.stop(when + dur + 0.02);
   }
 
-  playTimpani(dest, when) {
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(95, when);
-    osc.frequency.exponentialRampToValueAtTime(42, when + 0.35);
-    gain.gain.setValueAtTime(0.35, when);
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.55);
-    osc.connect(gain);
-    gain.connect(dest);
-    osc.start(when);
-    osc.stop(when + 0.6);
-  }
-
-  playChoirHit(dest, freqs, when) {
+  playStab(dest, freqs, when) {
     freqs.forEach((f, i) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
-      osc.type = "sine";
+      osc.type = "sawtooth";
       osc.frequency.value = f;
       gain.gain.setValueAtTime(0.0001, when);
-      gain.gain.linearRampToValueAtTime(0.04 - i * 0.008, when + 0.15);
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + 1.8);
+      gain.gain.linearRampToValueAtTime(0.06 - i * 0.012, when + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.55);
       osc.connect(gain);
       gain.connect(dest);
       osc.start(when);
-      osc.stop(when + 2);
+      osc.stop(when + 0.6);
     });
+  }
+
+  playRiser(dest, when, dur) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(180, when);
+    osc.frequency.exponentialRampToValueAtTime(520, when + dur);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.linearRampToValueAtTime(0.05, when + dur * 0.85);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    osc.connect(gain);
+    gain.connect(dest);
+    osc.start(when);
+    osc.stop(when + dur + 0.05);
   }
 
   stopFallback() {

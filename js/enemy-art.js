@@ -1,4 +1,5 @@
 import { ENEMIES } from "./data.js";
+import { worldToScreen } from "./iso.js";
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -12,16 +13,24 @@ function shade(hex, amt) {
   return `rgb(${r},${g},${b})`;
 }
 
-export function drawEnemyArt(ctx, e, time) {
+export function drawEnemyArt(ctx, e, time, opts = {}) {
+  const atOrigin = opts.atOrigin ?? false;
+
   if (e.state === "windup") {
     const len = e.type === "boss" ? 120 : 90;
+    const a = worldToScreen(e.x, e.y, 0);
+    const b = worldToScreen(
+      e.x + Math.cos(e.chargeAngle) * len,
+      e.y + Math.sin(e.chargeAngle) * len,
+      0
+    );
     ctx.strokeStyle = "rgba(255, 45, 85, 0.9)";
     ctx.lineWidth = 3;
     ctx.shadowColor = "#ff2d55";
     ctx.shadowBlur = 16;
     ctx.beginPath();
-    ctx.moveTo(e.x, e.y);
-    ctx.lineTo(e.x + Math.cos(e.chargeAngle) * len, e.y + Math.sin(e.chargeAngle) * len);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
     ctx.shadowBlur = 0;
   }
@@ -33,7 +42,8 @@ export function drawEnemyArt(ctx, e, time) {
   const face = e.faceAngle ?? 0;
 
   ctx.save();
-  ctx.translate(e.x, e.y + bob);
+  if (!atOrigin) ctx.translate(e.x, e.y + bob);
+  else ctx.translate(0, bob);
   ctx.rotate(face);
 
   if (e.state === "windup") {

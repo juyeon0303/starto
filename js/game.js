@@ -22,6 +22,7 @@ import {
   addFloatText,
   addRing,
   addTrail,
+  screenToWorld,
 } from "./vfx.js";
 import { mountSilhouette } from "./silhouettes.js";
 import { createGameAudio } from "./audio.js";
@@ -39,6 +40,12 @@ const SKILL_DMG = 3.8;
 const SKILL2_DMG = 2.4;
 /** J = 연타 평타. K/L만 쿨 있음. */
 const BASIC_DMG = 1.05;
+const MELEE_SLASH_RANGE = 78;
+const MELEE_SLASH_ARC = 0.82;
+const STAB_RANGE = 92;
+const BASH_RADIUS = 58;
+const KITE_START = 130;
+const KITE_MAX_BOOST = 0.38;
 const AUTO_ATTACK_ENABLED = false;
 const SKILL_RING_LEN = 226;
 
@@ -103,8 +110,11 @@ export class Game {
     window.addEventListener("keyup", (e) => (this.keys[e.code] = false));
     canvas.addEventListener("mousemove", (e) => {
       const r = canvas.getBoundingClientRect();
-      this.mouse.x = ((e.clientX - r.left) / r.width) * W;
-      this.mouse.y = ((e.clientY - r.top) / r.height) * H;
+      const sx = ((e.clientX - r.left) / r.width) * W;
+      const sy = ((e.clientY - r.top) / r.height) * H;
+      const w = screenToWorld(sx, sy);
+      this.mouse.x = w.x;
+      this.mouse.y = w.y;
     });
 
     this.showWelcome();
@@ -564,13 +574,15 @@ export class Game {
       friendly: true,
       homing: opts.homing !== false,
       homingTurn: opts.homingTurn ?? 22,
+      maxTrackRange: opts.maxTrackRange ?? Infinity,
       kind,
     });
   }
 
   steerProjectile(pr, dt) {
     if (!pr.friendly || pr.homing === false) return;
-    const target = this.nearestEnemyFrom(pr.x, pr.y);
+    const maxR = pr.maxTrackRange ?? Infinity;
+    const target = this.nearestEnemyFrom(pr.x, pr.y, maxR);
     if (!target) return;
 
     const speed = Math.hypot(pr.vx, pr.vy) || 1;
@@ -707,15 +719,51 @@ export class Game {
     setTimeout(() => this.ui.skillSlots?.[i]?.root?.classList.remove("just-used"), 120);
   }
 
-  basicDamage() {
-    return this.champion.damage * BASIC_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+  basicRange() {
+    return (this.champion?.range ?? 60) * this.eventFog;
+  }
+
+  basicDamage(dist = 0) {
+    let dmg = this.champion.damage * BASIC_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+    const type = this.champion.spaceType;
+    if (type === "bolt" || type === "shot" || type === "zap") {
+      dmg *= this.rangedFalloff(dist);
+    }
+    return dmg;
+  }
+
+  rangedFalloff(dist, range = this.basicRange()) {
+    if (dist <= range * 0.72) return 1;
+    if (dist >= range) return 0.58;
+    const t = (dist - range * 0.72) / (range * 0.28);
+    return 1 - t * 0.42;
+  }
+
+  enemyChaseMul(e, p) {
+    const d = Math.hypot(p.x - e.x, p.y - e.y);
+    if (d <= KITE_START) return 1;
+    return 1 + Math.min(KITE_MAX_BOOST, (d - KITE_START) / 320);
+  }
+
+  basicProjectileOpts(extra = {}) {
+    const c = this.champion;
+    const homing = c?.spaceHoming === true;
+    return {
+      homing,
+      homingTurn: homing ? (c?.spaceHomingTurn ?? 14) : 0,
+      maxTrackRange: this.basicRange() + 24,
+      ...extra,
+    };
   }
 
   castSpace() {
     const p = this.player;
     const c = this.champion;
     const th = themeFor(c);
-    const dmg = this.basicDamage();
+    const maxR = this.basicRange();
+    const near = this.nearestEnemy(maxR + 20);
+    const nearDist = near ? Math.hypot(near.x - p.x, near.y - p.y) : maxR;
+    const dmg = this.basicDamage(nearDist);
     const a = p.angle;
 
     switch (c.spaceType) {
@@ -723,46 +771,64 @@ export class Game {
         this.enemies.forEach((e) => {
           const ea = Math.atan2(e.y - p.y, e.x - p.x);
           const diff = Math.abs(normAngle(ea - a));
-          if (diff < 0.75 && Math.hypot(e.x - p.x, e.y - p.y) < 62) {
-            this.damageEnemy(e, dmg, true);
+          const d = Math.hypot(e.x - p.x, e.y - p.y);
+          if (diff < MELEE_SLASH_ARC && d < MELEE_SLASH_RANGE) {
+            this.damageEnemy(e, dmg * (d < MELEE_SLASH_RANGE * 0.55 ? 1.08 : 1), true);
           }
         });
         addTrail(this, p.x, p.y, p.x + Math.cos(a) * 50, p.y + Math.sin(a) * 50, th.slash, 6);
         break;
-      case "bolt":
-        this.pushFriendlyProjectile(p.x, p.y, a, 680, {
-          slot: "space",
-          damage: dmg,
-          life: 0.55,
-          radius: 9,
-          color: th.glow,
-        });
+      case "bolt": {
+        if (!near || nearDist > maxR) break;
+        this.pushFriendlyProjectile(
+          p.x,
+          p.y,
+          a,
+          620,
+          this.basicProjectileOpts({
+            slot: "space",
+            damage: dmg,
+            life: 0.5,
+            radius: 8,
+            color: th.glow,
+          })
+        );
         break;
+      }
       case "stab": {
-        const t = this.aimAtNearestEnemy(75) || this.nearestEnemy(75);
-        if (t) this.damageEnemy(t, dmg * 1.35, true);
-        else this.dealDamage(dmg, p.x + Math.cos(a) * 40, p.y + Math.sin(a) * 40, 40, 0);
+        const t = this.aimAtNearestEnemy(STAB_RANGE) || this.nearestEnemy(STAB_RANGE);
+        if (t) this.damageEnemy(t, dmg * 1.4, true);
+        else this.dealDamage(dmg, p.x + Math.cos(a) * 40, p.y + Math.sin(a) * 40, 44, 0);
         addTrail(this, p.x, p.y, p.x + Math.cos(a) * 36, p.y + Math.sin(a) * 36, th.glow, 4);
         break;
       }
       case "bash":
-        this.dealDamage(dmg, p.x, p.y, 52, 22);
+        this.dealDamage(dmg, p.x, p.y, BASH_RADIUS, 26);
         break;
-      case "shot":
-        this.pushFriendlyProjectile(p.x, p.y, a, 720, {
-          slot: "space",
-          damage: dmg,
-          life: 0.7,
-          radius: 5,
-          color: th.accent,
-        });
+      case "shot": {
+        if (!near || nearDist > maxR) break;
+        this.pushFriendlyProjectile(
+          p.x,
+          p.y,
+          a,
+          660,
+          this.basicProjectileOpts({
+            slot: "space",
+            damage: dmg,
+            life: 0.58,
+            radius: 5,
+            color: th.accent,
+          })
+        );
         break;
+      }
       case "zap": {
-        const t = this.aimAtNearestEnemy() || this.nearestEnemy(9999);
-        if (t) {
-          this.damageEnemy(t, dmg * 1.2, true);
-          addTrail(this, p.x, p.y, t.x, t.y, th.glow, 5);
-        }
+        const t = this.nearestEnemy(maxR);
+        if (!t) break;
+        const d = Math.hypot(t.x - p.x, t.y - p.y);
+        if (d > maxR) break;
+        this.damageEnemy(t, dmg * (c.spaceZapMult ?? 1), true);
+        addTrail(this, p.x, p.y, t.x, t.y, th.glow, 5);
         break;
       }
     }
@@ -963,6 +1029,8 @@ export class Game {
       return;
     }
 
+    const chase = this.enemyChaseMul(e, p);
+
     for (const trap of this.traps) {
       if (Math.hypot(e.x - trap.x, e.y - trap.y) < trap.r) e.slowMul = trap.slow;
     }
@@ -971,40 +1039,40 @@ export class Game {
 
     switch (e.pattern) {
       case "charge":
-        this.aiCharge(e, p, dt, slow);
+        this.aiCharge(e, p, dt, slow, chase);
         break;
       case "ranged":
-        this.aiRanged(e, p, dt, slow);
+        this.aiRanged(e, p, dt, slow, chase);
         break;
       case "tank":
-        this.aiChase(e, p, dt, slow * 0.95);
+        this.aiChase(e, p, dt, slow * 0.95, chase);
         break;
       case "flank":
-        this.aiFlank(e, p, dt, slow);
+        this.aiFlank(e, p, dt, slow, chase);
         break;
       case "zone":
-        this.aiCaster(e, p, dt, slow);
+        this.aiCaster(e, p, dt, slow, chase);
         break;
       case "boss":
-        this.aiBoss(e, p, dt, slow);
+        this.aiBoss(e, p, dt, slow, chase);
         break;
       default:
-        this.aiChase(e, p, dt, slow);
+        this.aiChase(e, p, dt, slow, chase);
     }
 
     this.clampEnemy(e);
   }
 
-  aiChase(e, p, dt, slow = 1) {
+  aiChase(e, p, dt, slow = 1, chase = 1) {
     const a = Math.atan2(p.y - e.y, p.x - e.x);
-    e.x += Math.cos(a) * e.speed * slow * dt;
-    e.y += Math.sin(a) * e.speed * slow * dt;
+    e.x += Math.cos(a) * e.speed * slow * chase * dt;
+    e.y += Math.sin(a) * e.speed * slow * chase * dt;
     this.tryMelee(e, p, dt);
   }
 
-  aiCharge(e, p, dt, slow) {
+  aiCharge(e, p, dt, slow, chase = 1) {
     if (e.state === "idle") {
-      this.aiChase(e, p, dt, slow * 0.7);
+      this.aiChase(e, p, dt, slow * 0.7, chase);
       e.stateT += dt;
       if (e.stateT > 1.35 && Math.hypot(p.x - e.x, p.y - e.y) < 260) {
         e.state = "windup";
@@ -1031,15 +1099,15 @@ export class Game {
     }
   }
 
-  aiRanged(e, p, dt, slow) {
+  aiRanged(e, p, dt, slow, chase = 1) {
     const d = Math.hypot(p.x - e.x, p.y - e.y);
     const a = Math.atan2(p.y - e.y, p.x - e.x);
     if (d > 210) {
-      e.x += Math.cos(a) * e.speed * slow * dt;
-      e.y += Math.sin(a) * e.speed * slow * dt;
+      e.x += Math.cos(a) * e.speed * slow * chase * dt;
+      e.y += Math.sin(a) * e.speed * slow * chase * dt;
     } else if (d < 150) {
-      e.x -= Math.cos(a) * e.speed * slow * dt;
-      e.y -= Math.sin(a) * e.speed * slow * dt;
+      e.x -= Math.cos(a) * e.speed * slow * chase * dt;
+      e.y -= Math.sin(a) * e.speed * slow * chase * dt;
     }
     e.shootCd -= dt;
     if (e.shootCd <= 0 && d < 320) {
@@ -1059,16 +1127,16 @@ export class Game {
     if (d < e.radius + p.radius + 2) this.hurtPlayer(e.damage * 0.6, "melee");
   }
 
-  aiFlank(e, p, dt, slow) {
+  aiFlank(e, p, dt, slow, chase = 1) {
     const a = Math.atan2(p.y - e.y, p.x - e.x);
     const perp = a + (Math.PI / 2) * e.flankSide;
-    e.x += (Math.cos(a) * 0.55 + Math.cos(perp) * 0.85) * e.speed * slow * dt;
-    e.y += (Math.sin(a) * 0.55 + Math.sin(perp) * 0.85) * e.speed * slow * dt;
+    e.x += (Math.cos(a) * 0.55 + Math.cos(perp) * 0.85) * e.speed * slow * chase * dt;
+    e.y += (Math.sin(a) * 0.55 + Math.sin(perp) * 0.85) * e.speed * slow * chase * dt;
     this.tryMelee(e, p, dt);
   }
 
-  aiCaster(e, p, dt, slow) {
-    this.aiChase(e, p, dt, slow * 0.55);
+  aiCaster(e, p, dt, slow, chase = 1) {
+    this.aiChase(e, p, dt, slow * 0.55, chase);
     e.zoneCd -= dt;
     if (e.zoneCd <= 0) {
       e.zoneCd = 3.2;
@@ -1084,8 +1152,11 @@ export class Game {
     }
   }
 
-  aiBoss(e, p, dt, slow) {
+  aiBoss(e, p, dt, slow, chase = 1) {
     e.stateT += dt;
+    if (e.state === "idle") {
+      this.aiChase(e, p, dt, slow * 0.5, chase);
+    }
     if (e.state === "idle" && e.stateT > 2.5) {
       e.state = "windup";
       e.stateT = 0;
@@ -1117,7 +1188,7 @@ export class Game {
         });
       }
     } else {
-      this.aiChase(e, p, dt, slow * 0.75);
+      this.aiChase(e, p, dt, slow * 0.75, chase);
     }
   }
 
@@ -1149,7 +1220,7 @@ export class Game {
     }
 
     p.angle = mx || my ? p.moveAngle : Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
-    if (this.enemies.length) this.aimAtNearestEnemy();
+    if (this.enemies.length) this.aimAtNearestEnemy(this.basicRange() + 40);
     if (p.spaceSwing > 0) p.spaceSwing -= dt;
     if (this.keys.KeyJ && p.spaceSwing <= 0) this.useSkill(0);
     if (p.skillCd > 0) p.skillCd -= dt;

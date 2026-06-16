@@ -6,6 +6,19 @@ import {
   themeFor,
 } from "./champ-vfx.js";
 import { drawEnemyArt } from "./enemy-art.js";
+import {
+  worldToScreen,
+  screenToWorld,
+  arenaCornersWorld,
+  entityLift,
+  drawGroundShadow,
+  drawIsoLine,
+  drawIsoCircle,
+  PLATFORM_DEPTH,
+  ISO_SCALE,
+} from "./iso.js";
+
+export { screenToWorld };
 
 export const PAD = 40;
 export const W = 960;
@@ -137,78 +150,122 @@ export function renderFrame(game, ctx) {
   ctx.translate(sx, sy);
 
   drawArenaBg(ctx, game.bgTime, game.event?.id);
-  drawArenaFloor(ctx, game.bgTime);
-  drawAmbientParticles(ctx, game);
+  drawIsoPlatform(ctx, game.bgTime);
+  drawAmbientParticlesIso(ctx, game);
 
-  game.traps.forEach((t) => drawTrap(ctx, t, game.bgTime));
-  game.zones.forEach((z) => drawZone(ctx, z, game.bgTime));
+  const layers = [];
+  const push = (wx, wy, lift, draw, bias = 0) => {
+    layers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
+  };
 
-  game.rings.forEach((r) => {
-    ctx.globalAlpha = r.t * 0.7;
-    ctx.strokeStyle = r.color;
-    ctx.lineWidth = 3;
-    ctx.shadowColor = r.color;
-    ctx.shadowBlur = 16;
-    ctx.beginPath();
-    ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-  });
+  game.traps.forEach((t) => push(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
+  game.zones.forEach((z) => push(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
+
+  game.rings.forEach((r) =>
+    push(r.x, r.y, 0, () => {
+      ctx.globalAlpha = r.t * 0.7;
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = r.color;
+      ctx.shadowBlur = 16;
+      drawIsoCircle(ctx, r.x, r.y, r.r, 0);
+      ctx.stroke();
+      ctx.restore();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    })
+  );
+
+  game.trails.forEach((tr) =>
+    push(tr.x2, tr.y2, 2, () => {
+      ctx.globalAlpha = tr.life * 0.5;
+      ctx.strokeStyle = tr.color;
+      ctx.lineWidth = tr.width;
+      drawIsoLine(ctx, tr.x1, tr.y1, tr.x2, tr.y2, 4);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    })
+  );
+
+  game.enemyProjectiles.forEach((pr) =>
+    push(pr.x, pr.y, 10, () => drawProjectileIso(ctx, pr, false))
+  );
+
+  layers.sort((a, b) => a.depth - b.depth);
+  layers.forEach((l) => l.draw());
+  drawFx(ctx, game);
+    push(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
+  );
 
   game.enemies.forEach((e) => {
-    drawEnemyArt(ctx, e, game.bgTime);
-    drawHpBar(ctx, e.x, e.y - e.radius - 16, 42, 5, e.hp / e.maxHp, "#ff6b81");
+    const lift = entityLift(e.radius);
+    push(e.x, e.y, lift, () => {
+      drawGroundShadow(ctx, e.x, e.y, e.radius);
+      const body = worldToScreen(e.x, e.y, lift);
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.scale(1.06, 1.06);
+      drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
+      ctx.restore();
+    });
+    push(e.x, e.y, lift + 34, () => {
+      const hp = worldToScreen(e.x, e.y, lift + 34);
+      drawHpBar(ctx, hp.x, hp.y, 42, 5, e.hp / e.maxHp, "#ff6b81");
+    }, 0.01);
   });
-
-  game.trails.forEach((tr) => {
-    ctx.globalAlpha = tr.life * 0.5;
-    ctx.strokeStyle = tr.color;
-    ctx.lineWidth = tr.width;
-    ctx.beginPath();
-    ctx.moveTo(tr.x1, tr.y1);
-    ctx.lineTo(tr.x2, tr.y2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  });
-
-  game.enemyProjectiles.forEach((pr) => drawProjectile(ctx, pr, false));
-
-  drawFx(ctx, game);
-
-  game.projectiles.forEach((pr) => drawChampProjectile(ctx, pr));
 
   if (game.player) {
+    const p = game.player;
     const th = themeFor(game.champion);
-    drawChampPlayer(ctx, game.player, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-    drawHpBar(ctx, game.player.x, game.player.y - 38, 56, 6, game.player.hp / game.player.maxHp, th.accent, true);
+    const lift = entityLift(p.radius);
+    push(p.x, p.y, lift, () => {
+      drawGroundShadow(ctx, p.x, p.y, p.radius);
+      const body = worldToScreen(p.x, p.y, lift);
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
+      ctx.restore();
+    });
+    push(p.x, p.y, lift + 40, () => {
+      const hp = worldToScreen(p.x, p.y, lift + 40);
+      drawHpBar(ctx, hp.x, hp.y, 56, 6, p.hp / p.maxHp, th.accent, true);
+    }, 0.02);
   }
 
-  game.sparks.forEach((s) => {
-    ctx.globalAlpha = s.t;
-    ctx.fillStyle = s.color;
-    ctx.shadowColor = s.color;
-    ctx.shadowBlur = 8;
-    ctx.fillRect(s.x, s.y, s.size, s.size);
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-  });
+  game.sparks.forEach((s) =>
+    push(s.x, s.y, 8, () => {
+      const p = worldToScreen(s.x, s.y, 8);
+      ctx.globalAlpha = s.t;
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 8;
+      ctx.fillRect(p.x, p.y, s.size, s.size);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    })
+  );
 
-  game.particles.forEach((fx) => drawParticle(ctx, fx));
+  game.particles.forEach((fx) =>
+    push(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
+  );
+
+  layers.sort((a, b) => a.depth - b.depth);
+  layers.forEach((l) => l.draw());
 
   game.floatTexts.forEach((f) => {
+    const p = worldToScreen(f.x, f.y, entityLift(16) + 20);
     ctx.globalAlpha = Math.min(1, f.t * 2);
     ctx.font = `bold ${f.size}px Syne, Malgun Gothic, sans-serif`;
     ctx.fillStyle = f.color;
     ctx.shadowColor = f.color;
     ctx.shadowBlur = 10;
-    ctx.fillText(f.text, f.x, f.y);
+    ctx.fillText(f.text, p.x, p.y);
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;
   });
 
-  drawArenaBorder(ctx, game.bgTime);
-  drawTopBanner(ctx, game);
+  drawArenaBorderIso(ctx, game.bgTime);
+  drawTopBannerIso(ctx, game);
 
   ctx.restore();
 
@@ -254,20 +311,15 @@ function drawArenaBg(ctx, time, eventId) {
   ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
   ctx.globalAlpha = 1;
 
-  drawArenaPillars(ctx, time);
+  drawArenaPillarsIso(ctx, time);
 }
 
-function drawArenaPillars(ctx, time) {
-  const corners = [
-    [PAD + 6, PAD + 6],
-    [W - PAD - 6, PAD + 6],
-    [PAD + 6, H - PAD - 6],
-    [W - PAD - 6, H - PAD - 6],
-  ];
-  corners.forEach(([x, y], i) => {
+function drawArenaPillarsIso(ctx, time) {
+  arenaCornersWorld().forEach(([x, y], i) => {
+    const base = worldToScreen(x, y, 0);
     const pulse = 0.65 + Math.sin(time * 1.8 + i) * 0.2;
     ctx.save();
-    ctx.translate(x, y);
+    ctx.translate(base.x, base.y - 28);
     ctx.globalAlpha = 0.35 * pulse;
     const g = ctx.createLinearGradient(0, -28, 0, 28);
     g.addColorStop(0, "#7dd3fc");
@@ -285,92 +337,254 @@ function drawArenaPillars(ctx, time) {
   });
 }
 
-function drawArenaFloor(ctx, time) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(PAD, PAD, W - PAD * 2, H - PAD * 2);
-  ctx.clip();
+function drawIsoPlatform(ctx, time) {
+  const tl = worldToScreen(PAD, PAD, 0);
+  const tr = worldToScreen(W - PAD, PAD, 0);
+  const br = worldToScreen(W - PAD, H - PAD, 0);
+  const bl = worldToScreen(PAD, H - PAD, 0);
+  const d = PLATFORM_DEPTH;
 
-  const floor = ctx.createLinearGradient(PAD, PAD, PAD, H - PAD);
-  floor.addColorStop(0, "#1a2438");
-  floor.addColorStop(0.45, "#121a28");
-  floor.addColorStop(1, "#0a1018");
-  ctx.fillStyle = floor;
-  ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
+  ctx.fillStyle = "#060910";
+  ctx.beginPath();
+  ctx.moveTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(br.x, br.y + d);
+  ctx.lineTo(tr.x, tr.y + d);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#0a1018";
+  ctx.beginPath();
+  ctx.moveTo(bl.x, bl.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(br.x, br.y + d);
+  ctx.lineTo(bl.x, bl.y + d);
+  ctx.closePath();
+  ctx.fill();
+
+  const topGrad = ctx.createLinearGradient(tl.x, tl.y, br.x, br.y);
+  topGrad.addColorStop(0, "#1e293b");
+  topGrad.addColorStop(0.5, "#141c2b");
+  topGrad.addColorStop(1, "#0f1724");
+  ctx.fillStyle = topGrad;
+  ctx.beginPath();
+  ctx.moveTo(tl.x, tl.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(bl.x, bl.y);
+  ctx.closePath();
+  ctx.fill();
 
   if (arenaImgReady) {
-    ctx.globalAlpha = 0.22;
-    ctx.drawImage(ARENA_IMG, PAD, PAD, W - PAD * 2, H - PAD * 2);
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tl.x, tl.y);
+    ctx.lineTo(tr.x, tr.y);
+    ctx.lineTo(br.x, br.y);
+    ctx.lineTo(bl.x, bl.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.globalAlpha = 0.18;
+    ctx.drawImage(ARENA_IMG, tl.x, tl.y - 20, tr.x - tl.x + 40, br.y - tl.y + 40);
     ctx.globalAlpha = 1;
+    ctx.restore();
   }
 
-  const tile = 64;
-  ctx.strokeStyle = "rgba(148, 163, 184, 0.07)";
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.12)";
   ctx.lineWidth = 1;
-  for (let x = PAD; x < W - PAD; x += tile) {
+  const tile = 56;
+  for (let i = 0; i <= 8; i++) {
+    const t = i / 8;
+    const a = worldToScreen(PAD + (W - PAD * 2) * t, PAD, 0);
+    const b = worldToScreen(PAD + (W - PAD * 2) * t, H - PAD, 0);
     ctx.beginPath();
-    ctx.moveTo(x, PAD);
-    ctx.lineTo(x, H - PAD);
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
-  }
-  for (let y = PAD; y < H - PAD; y += tile) {
+    const c = worldToScreen(PAD, PAD + (H - PAD * 2) * t, 0);
+    const e = worldToScreen(W - PAD, PAD + (H - PAD * 2) * t, 0);
     ctx.beginPath();
-    ctx.moveTo(PAD, y);
-    ctx.lineTo(W - PAD, y);
-    ctx.stroke();
-  }
-
-  ctx.globalAlpha = 0.12;
-  ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
-  ctx.lineWidth = 1.5;
-  const grid = 48;
-  const off = (time * 10) % grid;
-  for (let x = PAD - grid; x < W - PAD + grid; x += grid) {
-    ctx.beginPath();
-    ctx.moveTo(x + off, PAD);
-    ctx.lineTo(x + off, H - PAD);
-    ctx.stroke();
-  }
-  for (let y = PAD - grid; y < H - PAD + grid; y += grid) {
-    ctx.beginPath();
-    ctx.moveTo(PAD, y + off * 0.35);
-    ctx.lineTo(W - PAD, y + off * 0.35);
+    ctx.moveTo(c.x, c.y);
+    ctx.lineTo(e.x, e.y);
     ctx.stroke();
   }
 
-  ctx.globalAlpha = 0.18;
-  const centerGlow = ctx.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, 340);
-  centerGlow.addColorStop(0, "rgba(56, 189, 248, 0.25)");
-  centerGlow.addColorStop(0.55, "rgba(14, 165, 233, 0.06)");
-  centerGlow.addColorStop(1, "transparent");
-  ctx.fillStyle = centerGlow;
-  ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
-
-  ctx.globalAlpha = 0.1;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.35 + Math.sin(time * 2) * 0.08;
+  ctx.strokeStyle = "#38bdf8";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 12;
   ctx.beginPath();
-  ctx.moveTo(W / 2, PAD);
-  ctx.lineTo(W / 2, H - PAD);
-  ctx.moveTo(PAD, H / 2);
-  ctx.lineTo(W - PAD, H / 2);
+  ctx.moveTo(tl.x, tl.y);
+  ctx.lineTo(tr.x, tr.y);
+  ctx.lineTo(br.x, br.y);
+  ctx.lineTo(bl.x, bl.y);
+  ctx.closePath();
   ctx.stroke();
-
-  ctx.globalAlpha = 0.08;
-  for (let i = 0; i < 6; i++) {
-    const cx = PAD + 80 + ((i * 173) % (W - PAD * 2 - 160));
-    const cy = PAD + 60 + ((i * 97) % (H - PAD * 2 - 120));
-    ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
-    ctx.beginPath();
-    ctx.moveTo(cx - 18, cy);
-    ctx.lineTo(cx + 22, cy + 8);
-    ctx.moveTo(cx, cy - 14);
-    ctx.lineTo(cx + 6, cy + 16);
-    ctx.stroke();
-  }
-
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
+}
+
+function drawAmbientParticlesIso(ctx, game) {
+  if (!game.ambientParticles) return;
+  for (const p of game.ambientParticles) {
+    const s = worldToScreen(p.x, p.y, 4 + Math.sin(p.a) * 3);
+    ctx.globalAlpha = 0.25 + Math.sin(p.a) * 0.2;
+    ctx.fillStyle = `hsla(${p.hue}, 90%, 72%, 0.9)`;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 1;
+}
+
+function drawTrapIso(ctx, t, time) {
+  const pulse = Math.sin(time * 4 + t.x) * 0.15 + 0.85;
+  ctx.globalAlpha = 0.2 * pulse;
+  ctx.fillStyle = "#69f0ae";
+  drawIsoCircle(ctx, t.x, t.y, t.r, 0);
+  ctx.fill();
   ctx.restore();
+  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = "#69f0ae";
+  ctx.setLineDash([6, 6]);
+  ctx.lineWidth = 1.5;
+  drawIsoCircle(ctx, t.x, t.y, t.r, 0);
+  ctx.stroke();
+  ctx.restore();
+  ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
+}
+
+function drawZoneIso(ctx, z, time) {
+  const hostile = !z.friendly;
+  const base = hostile ? "#ff2d55" : "#00d4ff";
+  const tele = z.telegraph > 0;
+
+  if (tele) {
+    const p = 1 - z.telegraph / 1.2;
+    ctx.globalAlpha = 0.25 + p * 0.35;
+    ctx.strokeStyle = base;
+    ctx.lineWidth = 2 + p * 2;
+    ctx.shadowColor = base;
+    ctx.shadowBlur = 20;
+    ctx.setLineDash([8, 6]);
+    drawIsoCircle(ctx, z.x, z.y, z.r * (0.85 + p * 0.15), 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.setLineDash([]);
+    ctx.shadowBlur = 0;
+  } else if (hostile) {
+    ctx.globalAlpha = 0.35 + Math.sin(time * 8) * 0.08;
+    ctx.fillStyle = "rgba(255, 45, 85, 0.35)";
+    drawIsoCircle(ctx, z.x, z.y, z.r, 0);
+    ctx.fill();
+    ctx.restore();
+  } else {
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = base;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = base;
+    ctx.shadowBlur = 14;
+    drawIsoCircle(ctx, z.x, z.y, z.r, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.shadowBlur = 0;
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawProjectileIso(ctx, pr, friendly) {
+  const lift = friendly ? 14 : 10;
+  const pos = worldToScreen(pr.x, pr.y, lift);
+  drawGroundShadow(ctx, pr.x, pr.y, pr.radius * 0.55);
+  if (friendly) {
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    drawChampProjectile(ctx, { ...pr, x: 0, y: 0 });
+    ctx.restore();
+    return;
+  }
+  const ang = Math.atan2(pr.vy, pr.vx);
+  const color = "#ffb74d";
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.rotate(ang);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(8, 0);
+  ctx.lineTo(-6, 4);
+  ctx.lineTo(-4, 0);
+  ctx.lineTo(-6, -4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawParticleIso(ctx, fx) {
+  ctx.globalAlpha = fx.big ? fx.t * 0.5 : fx.t;
+  const r = fx.big ? 55 * (1 - fx.t) + 15 : 6;
+  const p = worldToScreen(fx.x, fx.y, 8);
+  const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * ISO_SCALE);
+  g.addColorStop(0, fx.color);
+  g.addColorStop(1, "transparent");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r * ISO_SCALE, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawArenaBorderIso(ctx, time) {
+  const pulse = 0.6 + Math.sin(time * 2.2) * 0.18;
+  const corners = arenaCornersWorld();
+  const pts = corners.map(([x, y]) => worldToScreen(x, y, 0));
+  ctx.save();
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 18 * pulse;
+  ctx.strokeStyle = `rgba(56, 189, 248, ${0.45 + pulse * 0.2})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+  ctx.closePath();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.font = "700 9px Syne, Malgun Gothic, sans-serif";
+  ctx.fillStyle = "rgba(186, 230, 253, 0.55)";
+  ctx.fillText("ARENA", pts[0].x + 12, pts[0].y + 16);
+  ctx.textAlign = "right";
+  ctx.fillText("FLOOR", pts[2].x - 12, pts[2].y + 8);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
+function drawTopBannerIso(ctx, game) {
+  const anchor = worldToScreen(PAD + 20, PAD + 12, 0);
+  ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+  ctx.fillRect(anchor.x, anchor.y, 340, 32);
+  ctx.font = "600 13px Syne, Malgun Gothic, sans-serif";
+  ctx.fillStyle = "#c8d6e5";
+  ctx.fillText(game.message || "", anchor.x + 10, anchor.y + 21);
+
+  if (game.scoutCounter && game.state === "combat") {
+    const right = worldToScreen(W - PAD - 20, PAD + 12, 0);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
+    ctx.fillText(`◆ ${game.scoutCounter.name}`, right.x, right.y + 21);
+    ctx.textAlign = "left";
+  }
+}
+
+function drawArenaPillars(ctx, time) {
+  drawArenaPillarsIso(ctx, time);
+}
+
+function drawArenaFloor(ctx, time) {
+  drawIsoPlatform(ctx, time);
 }
 
 function drawAmbientParticles(ctx, game) {

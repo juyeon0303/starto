@@ -1,4 +1,6 @@
 /** 챔프별 테마 · 인게임 실루엣 · 스킬 연출 */
+import { worldToScreen, entityLift } from "./iso.js";
+
 export const CHAMP_THEMES = {
   blade: {
     color: "#ff7043",
@@ -66,10 +68,12 @@ export function drawFx(ctx, game) {
   const time = game.bgTime || 0;
   for (const f of game.fx) {
     const life = f.t / (f.maxT || 0.4);
+    const lift = f.kind === "afterimage" ? entityLift(16) : 4;
     ctx.save();
     switch (f.kind) {
       case "slashArc": {
-        ctx.translate(f.x, f.y);
+        const c = worldToScreen(f.x, f.y, lift);
+        ctx.translate(c.x, c.y);
         ctx.rotate(f.angle);
         ctx.globalAlpha = life * 0.85;
         ctx.strokeStyle = f.color;
@@ -77,30 +81,32 @@ export function drawFx(ctx, game) {
         ctx.shadowColor = f.color;
         ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.arc(0, 0, f.r, -f.span, f.span);
+        ctx.arc(0, 0, f.r * 0.62, -f.span, f.span);
         ctx.stroke();
         break;
       }
       case "shockwave": {
+        const c = worldToScreen(f.x, f.y, 2);
         ctx.globalAlpha = life * 0.6;
         ctx.strokeStyle = f.color;
         ctx.lineWidth = 3;
         ctx.shadowColor = f.color;
         ctx.shadowBlur = 14;
         ctx.beginPath();
-        ctx.arc(f.x, f.y, f.r * (1.1 - life * 0.3), 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, f.r * (1.1 - life * 0.3) * 0.55, 0, Math.PI * 2);
         ctx.stroke();
         break;
       }
       case "nova": {
+        const c = worldToScreen(f.x, f.y, 2);
         ctx.globalAlpha = life * 0.5;
-        const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.r * (1.2 - life * 0.5));
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, f.r * (1.2 - life * 0.5) * 0.5);
         g.addColorStop(0, f.color);
         g.addColorStop(0.55, "transparent");
         g.addColorStop(1, "transparent");
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(f.x, f.y, f.r * (1.3 - life * 0.4), 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, f.r * (1.3 - life * 0.4) * 0.55, 0, Math.PI * 2);
         ctx.fill();
         break;
       }
@@ -110,12 +116,14 @@ export function drawFx(ctx, game) {
         ctx.lineWidth = 2.5;
         ctx.shadowColor = f.color;
         ctx.shadowBlur = 16;
+        const a = worldToScreen(f.x1, f.y1, lift);
+        const b = worldToScreen(f.x2, f.y2, lift);
+        const mx = (a.x + b.x) / 2 + (f.jx || 0);
+        const my = (a.y + b.y) / 2 + (f.jy || 0);
         ctx.beginPath();
-        ctx.moveTo(f.x1, f.y1);
-        const mx = (f.x1 + f.x2) / 2 + (f.jx || 0);
-        const my = (f.y1 + f.y2) / 2 + (f.jy || 0);
+        ctx.moveTo(a.x, a.y);
         ctx.lineTo(mx, my);
-        ctx.lineTo(f.x2, f.y2);
+        ctx.lineTo(b.x, b.y);
         ctx.stroke();
         ctx.lineWidth = 6;
         ctx.globalAlpha = life * 0.25;
@@ -123,7 +131,8 @@ export function drawFx(ctx, game) {
         break;
       }
       case "afterimage": {
-        ctx.translate(f.x, f.y);
+        const c = worldToScreen(f.x, f.y, entityLift(16));
+        ctx.translate(c.x, c.y);
         ctx.rotate(f.angle);
         ctx.globalAlpha = life * 0.45;
         drawChampBody(ctx, f.champId, time, true);
@@ -134,9 +143,11 @@ export function drawFx(ctx, game) {
         ctx.strokeStyle = f.color;
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 8]);
+        const a = worldToScreen(f.x1, f.y1, lift);
+        const b = worldToScreen(f.x2, f.y2, lift);
         ctx.beginPath();
-        ctx.moveTo(f.x2, f.y2);
-        ctx.lineTo(f.x1, f.y1);
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(a.x, a.y);
         ctx.stroke();
         ctx.setLineDash([]);
         break;
@@ -146,8 +157,9 @@ export function drawFx(ctx, game) {
         ctx.globalAlpha = life * 0.35 * pulse;
         ctx.strokeStyle = f.color;
         ctx.lineWidth = 2;
+        const c = worldToScreen(f.x, f.y, 0);
         ctx.beginPath();
-        ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+        ctx.ellipse(c.x, c.y, f.r * 0.55, f.r * 0.28, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = life * 0.15;
         ctx.fillStyle = f.color;
