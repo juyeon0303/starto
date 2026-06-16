@@ -1,4 +1,3 @@
-import { ENEMIES } from "./data.js";
 import {
   updateFx,
   drawFx,
@@ -6,10 +5,18 @@ import {
   drawChampProjectile,
   themeFor,
 } from "./champ-vfx.js";
+import { drawEnemyArt } from "./enemy-art.js";
 
 export const PAD = 40;
 export const W = 960;
 export const H = 560;
+
+const ARENA_IMG = new Image();
+ARENA_IMG.src = "assets/images/sao-bg.jpg";
+let arenaImgReady = false;
+ARENA_IMG.onload = () => {
+  arenaImgReady = true;
+};
 
 export function initVfx(game) {
   game.shake = 0;
@@ -21,6 +28,15 @@ export function initVfx(game) {
   game.trails = [];
   game.fx = [];
   game.bgTime = 0;
+  game.ambientParticles = Array.from({ length: 28 }, () => ({
+    x: PAD + Math.random() * (W - PAD * 2),
+    y: PAD + Math.random() * (H - PAD * 2),
+    r: 1 + Math.random() * 2.2,
+    vy: -8 - Math.random() * 14,
+    vx: (Math.random() - 0.5) * 6,
+    hue: Math.random() > 0.5 ? 190 : 280,
+    a: Math.random(),
+  }));
 }
 
 export function addShake(game, amount) {
@@ -95,6 +111,20 @@ export function updateVfx(game, dt) {
   });
 
   updateFx(game, dt);
+
+  if (game.ambientParticles) {
+    for (const p of game.ambientParticles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.a += dt * 0.4;
+      if (p.y < PAD) {
+        p.y = H - PAD;
+        p.x = PAD + Math.random() * (W - PAD * 2);
+      }
+      if (p.x < PAD) p.x = W - PAD;
+      if (p.x > W - PAD) p.x = PAD;
+    }
+  }
 }
 
 export function renderFrame(game, ctx) {
@@ -108,6 +138,7 @@ export function renderFrame(game, ctx) {
 
   drawArenaBg(ctx, game.bgTime, game.event?.id);
   drawArenaFloor(ctx, game.bgTime);
+  drawAmbientParticles(ctx, game);
 
   game.traps.forEach((t) => drawTrap(ctx, t, game.bgTime));
   game.zones.forEach((z) => drawZone(ctx, z, game.bgTime));
@@ -125,7 +156,10 @@ export function renderFrame(game, ctx) {
     ctx.globalAlpha = 1;
   });
 
-  game.enemies.forEach((e) => drawEnemy(ctx, e, game.bgTime));
+  game.enemies.forEach((e) => {
+    drawEnemyArt(ctx, e, game.bgTime);
+    drawHpBar(ctx, e.x, e.y - e.radius - 16, 42, 5, e.hp / e.maxHp, "#ff6b81");
+  });
 
   game.trails.forEach((tr) => {
     ctx.globalAlpha = tr.life * 0.5;
@@ -147,7 +181,7 @@ export function renderFrame(game, ctx) {
   if (game.player) {
     const th = themeFor(game.champion);
     drawChampPlayer(ctx, game.player, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-    drawHpBar(ctx, game.player.x, game.player.y - 32, 52, 6, game.player.hp / game.player.maxHp, th.accent, true);
+    drawHpBar(ctx, game.player.x, game.player.y - 38, 56, 6, game.player.hp / game.player.maxHp, th.accent, true);
   }
 
   game.sparks.forEach((s) => {
@@ -187,20 +221,68 @@ export function renderFrame(game, ctx) {
 }
 
 function drawArenaBg(ctx, time, eventId) {
-  const grd = ctx.createLinearGradient(0, 0, W, H);
-  grd.addColorStop(0, "#070a12");
-  grd.addColorStop(0.5, eventId === "surge" ? "#120818" : "#0a0f18");
-  grd.addColorStop(1, "#050810");
-  ctx.fillStyle = grd;
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, eventId === "surge" ? "#1a1030" : "#0d1a2e");
+  sky.addColorStop(0.35, eventId === "rage" ? "#241018" : "#122038");
+  sky.addColorStop(0.72, "#0a1420");
+  sky.addColorStop(1, "#050810");
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.globalAlpha = 0.07;
-  const rg = ctx.createRadialGradient(W / 2, H / 2, 40, W / 2, H / 2, 420);
-  rg.addColorStop(0, eventId === "rage" ? "#ff3366" : "#00d4ff");
-  rg.addColorStop(1, "transparent");
-  ctx.fillStyle = rg;
+  ctx.globalAlpha = 0.35;
+  const sun = ctx.createRadialGradient(W * 0.72, H * 0.08, 0, W * 0.72, H * 0.08, 220);
+  sun.addColorStop(0, eventId === "surge" ? "#c084fc" : "#7dd3fc");
+  sun.addColorStop(0.4, "rgba(125, 211, 252, 0.08)");
+  sun.addColorStop(1, "transparent");
+  ctx.fillStyle = sun;
   ctx.fillRect(0, 0, W, H);
+
+  ctx.globalAlpha = 0.55;
+  for (let i = 0; i < 40; i++) {
+    const sx = ((i * 137) % W) + Math.sin(time * 0.15 + i) * 2;
+    const sy = ((i * 89) % (H * 0.55)) + 12;
+    const tw = 0.35 + Math.sin(time * 1.2 + i * 0.7) * 0.35;
+    ctx.globalAlpha = tw * 0.7;
+    ctx.fillStyle = i % 3 === 0 ? "#e0f2fe" : "#fff";
+    ctx.beginPath();
+    ctx.arc(sx, sy, i % 5 === 0 ? 1.4 : 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = eventId === "rage" ? "#ff3366" : "#00d4ff";
+  ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
   ctx.globalAlpha = 1;
+
+  drawArenaPillars(ctx, time);
+}
+
+function drawArenaPillars(ctx, time) {
+  const corners = [
+    [PAD + 6, PAD + 6],
+    [W - PAD - 6, PAD + 6],
+    [PAD + 6, H - PAD - 6],
+    [W - PAD - 6, H - PAD - 6],
+  ];
+  corners.forEach(([x, y], i) => {
+    const pulse = 0.65 + Math.sin(time * 1.8 + i) * 0.2;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = 0.35 * pulse;
+    const g = ctx.createLinearGradient(0, -28, 0, 28);
+    g.addColorStop(0, "#7dd3fc");
+    g.addColorStop(0.5, "#38bdf8");
+    g.addColorStop(1, "rgba(14, 165, 233, 0.1)");
+    ctx.fillStyle = g;
+    ctx.fillRect(-3, -32, 6, 64);
+    ctx.globalAlpha = 0.5 * pulse;
+    ctx.strokeStyle = "#bae6fd";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, -34, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  });
 }
 
 function drawArenaFloor(ctx, time) {
@@ -209,13 +291,40 @@ function drawArenaFloor(ctx, time) {
   ctx.rect(PAD, PAD, W - PAD * 2, H - PAD * 2);
   ctx.clip();
 
-  ctx.fillStyle = "#0c121c";
+  const floor = ctx.createLinearGradient(PAD, PAD, PAD, H - PAD);
+  floor.addColorStop(0, "#1a2438");
+  floor.addColorStop(0.45, "#121a28");
+  floor.addColorStop(1, "#0a1018");
+  ctx.fillStyle = floor;
   ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
 
-  ctx.strokeStyle = "rgba(0, 212, 255, 0.06)";
+  if (arenaImgReady) {
+    ctx.globalAlpha = 0.22;
+    ctx.drawImage(ARENA_IMG, PAD, PAD, W - PAD * 2, H - PAD * 2);
+    ctx.globalAlpha = 1;
+  }
+
+  const tile = 64;
+  ctx.strokeStyle = "rgba(148, 163, 184, 0.07)";
   ctx.lineWidth = 1;
+  for (let x = PAD; x < W - PAD; x += tile) {
+    ctx.beginPath();
+    ctx.moveTo(x, PAD);
+    ctx.lineTo(x, H - PAD);
+    ctx.stroke();
+  }
+  for (let y = PAD; y < H - PAD; y += tile) {
+    ctx.beginPath();
+    ctx.moveTo(PAD, y);
+    ctx.lineTo(W - PAD, y);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 0.12;
+  ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+  ctx.lineWidth = 1.5;
   const grid = 48;
-  const off = (time * 12) % grid;
+  const off = (time * 10) % grid;
   for (let x = PAD - grid; x < W - PAD + grid; x += grid) {
     ctx.beginPath();
     ctx.moveTo(x + off, PAD);
@@ -224,40 +333,110 @@ function drawArenaFloor(ctx, time) {
   }
   for (let y = PAD - grid; y < H - PAD + grid; y += grid) {
     ctx.beginPath();
-    ctx.moveTo(PAD, y + off * 0.5);
-    ctx.lineTo(W - PAD, y + off * 0.5);
+    ctx.moveTo(PAD, y + off * 0.35);
+    ctx.lineTo(W - PAD, y + off * 0.35);
     ctx.stroke();
   }
 
-  ctx.globalAlpha = 0.15;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.08)";
-  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.18;
+  const centerGlow = ctx.createRadialGradient(W / 2, H / 2, 20, W / 2, H / 2, 340);
+  centerGlow.addColorStop(0, "rgba(56, 189, 248, 0.25)");
+  centerGlow.addColorStop(0.55, "rgba(14, 165, 233, 0.06)");
+  centerGlow.addColorStop(1, "transparent");
+  ctx.fillStyle = centerGlow;
+  ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
+
+  ctx.globalAlpha = 0.1;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(W / 2, PAD);
   ctx.lineTo(W / 2, H - PAD);
   ctx.moveTo(PAD, H / 2);
   ctx.lineTo(W - PAD, H / 2);
   ctx.stroke();
+
+  ctx.globalAlpha = 0.08;
+  for (let i = 0; i < 6; i++) {
+    const cx = PAD + 80 + ((i * 173) % (W - PAD * 2 - 160));
+    const cy = PAD + 60 + ((i * 97) % (H - PAD * 2 - 120));
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.5)";
+    ctx.beginPath();
+    ctx.moveTo(cx - 18, cy);
+    ctx.lineTo(cx + 22, cy + 8);
+    ctx.moveTo(cx, cy - 14);
+    ctx.lineTo(cx + 6, cy + 16);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawAmbientParticles(ctx, game) {
+  if (!game.ambientParticles) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(PAD, PAD, W - PAD * 2, H - PAD * 2);
+  ctx.clip();
+  for (const p of game.ambientParticles) {
+    ctx.globalAlpha = 0.25 + Math.sin(p.a) * 0.2;
+    ctx.fillStyle = `hsla(${p.hue}, 90%, 72%, 0.9)`;
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
   ctx.restore();
 }
 
 function drawArenaBorder(ctx, time) {
-  const pulse = 0.6 + Math.sin(time * 2) * 0.15;
-  ctx.shadowColor = "#00d4ff";
-  ctx.shadowBlur = 18 * pulse;
-  ctx.strokeStyle = `rgba(0, 212, 255, ${0.45 + pulse * 0.2})`;
+  const pulse = 0.6 + Math.sin(time * 2.2) * 0.18;
+  const inner = PAD + 3;
+  const w = W - PAD * 2 - 6;
+  const h = H - PAD * 2 - 6;
+
+  ctx.save();
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = 22 * pulse;
+  ctx.strokeStyle = `rgba(56, 189, 248, ${0.35 + pulse * 0.25})`;
   ctx.lineWidth = 2;
-  ctx.strokeRect(PAD + 1, PAD + 1, W - PAD * 2 - 2, H - PAD * 2 - 2);
+  ctx.strokeRect(inner, inner, w, h);
+
+  ctx.shadowColor = "#c084fc";
+  ctx.shadowBlur = 14 * pulse;
+  ctx.strokeStyle = `rgba(192, 132, 252, ${0.2 + pulse * 0.15})`;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(inner + 4, inner + 4, w - 8, h - 8);
   ctx.shadowBlur = 0;
 
-  [[PAD, PAD], [W - PAD, PAD], [PAD, H - PAD], [W - PAD, H - PAD]].forEach(([x, y]) => {
-    ctx.fillStyle = "#00d4ff";
-    ctx.shadowColor = "#00d4ff";
-    ctx.shadowBlur = 12;
-    ctx.fillRect(x - 4, y - 4, 8, 8);
+  const corners = [
+    [PAD, PAD],
+    [W - PAD, PAD],
+    [PAD, H - PAD],
+    [W - PAD, H - PAD],
+  ];
+  corners.forEach(([x, y], i) => {
+    ctx.fillStyle = i % 2 === 0 ? "#38bdf8" : "#c084fc";
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 14;
+    ctx.fillRect(x - 5, y - 5, 10, 10);
+    ctx.strokeStyle = "#e0f2fe";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - 5, y - 5, 10, 10);
   });
   ctx.shadowBlur = 0;
+
+  ctx.font = "700 9px Syne, Malgun Gothic, sans-serif";
+  ctx.fillStyle = "rgba(186, 230, 253, 0.55)";
+  ctx.fillText("ARENA", PAD + 14, PAD + 22);
+  ctx.textAlign = "right";
+  ctx.fillText("FLOOR", W - PAD - 14, H - PAD - 10);
+  ctx.textAlign = "left";
+  ctx.restore();
 }
 
 function drawTopBanner(ctx, game) {
@@ -337,58 +516,47 @@ function drawZone(ctx, z, time) {
   ctx.globalAlpha = 1;
 }
 
-function drawEnemy(ctx, e, time) {
-  const def = ENEMIES[e.type] || {};
-  const glow = def.glow || e.color;
-
-  if (e.state === "windup") {
-    const len = e.type === "boss" ? 120 : 90;
-    ctx.strokeStyle = "rgba(255, 45, 85, 0.9)";
-    ctx.lineWidth = 3;
-    ctx.shadowColor = "#ff2d55";
-    ctx.shadowBlur = 16;
-    ctx.beginPath();
-    ctx.moveTo(e.x, e.y);
-    ctx.lineTo(e.x + Math.cos(e.chargeAngle) * len, e.y + Math.sin(e.chargeAngle) * len);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-  }
-
-  ctx.shadowColor = glow;
-  ctx.shadowBlur = e.type === "boss" ? 28 : 14;
-  ctx.fillStyle = e.color;
-  drawEntityShape(ctx, e.x, e.y, e.radius, def.shape || "circle", e.pattern === "ranged" ? e.shootCd : 0);
-  ctx.shadowBlur = 0;
-
-  if (e.stun > 0) {
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.radius + 5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  drawHpBar(ctx, e.x, e.y - e.radius - 14, 38, 5, e.hp / e.maxHp, "#ff2d55");
-}
-
 function drawProjectile(ctx, pr, friendly) {
-  const tail = 14;
+  const tail = friendly ? 16 : 12;
   const ang = Math.atan2(pr.vy, pr.vx);
-  ctx.strokeStyle = friendly ? pr.color || "#00d4ff" : "#ffb74d";
-  ctx.lineWidth = friendly ? 3 : 2;
-  ctx.shadowColor = ctx.strokeStyle;
-  ctx.shadowBlur = 12;
-  ctx.beginPath();
-  ctx.moveTo(pr.x - Math.cos(ang) * tail, pr.y - Math.sin(ang) * tail);
-  ctx.lineTo(pr.x, pr.y);
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.beginPath();
-  ctx.arc(pr.x, pr.y, pr.radius + 1, 0, Math.PI * 2);
-  ctx.fill();
+  const color = friendly ? pr.color || "#00d4ff" : "#ffb74d";
+
+  ctx.save();
+  ctx.translate(pr.x, pr.y);
+  ctx.rotate(ang);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = friendly ? 14 : 10;
+
+  if (friendly) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-tail, 0);
+    ctx.lineTo(0, 0);
+    ctx.stroke();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(0, 0, pr.radius + 1, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(8, 0);
+    ctx.lineTo(-6, 4);
+    ctx.lineTo(-4, 0);
+    ctx.lineTo(-6, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.globalAlpha = 0.45;
+    ctx.strokeStyle = "#fff3e0";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-tail, 0);
+    ctx.lineTo(-4, 0);
+    ctx.stroke();
+  }
+
+  ctx.restore();
 }
 
 function drawParticle(ctx, fx) {
@@ -402,43 +570,6 @@ function drawParticle(ctx, fx) {
   ctx.arc(fx.x, fx.y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-}
-
-function drawEntityShape(ctx, x, y, r, shape, cd = 0) {
-  ctx.beginPath();
-  switch (shape) {
-    case "diamond":
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      break;
-    case "hex":
-      for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 3) * i - Math.PI / 6;
-        const px = x + Math.cos(a) * r;
-        const py = y + Math.sin(a) * r;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      break;
-    case "square":
-      ctx.rect(x - r * 0.85, y - r * 0.85, r * 1.7, r * 1.7);
-      ctx.closePath();
-      ctx.fill();
-      if (cd > 0) {
-        ctx.strokeStyle = "rgba(255, 200, 100, 0.8)";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x, y, r + 4, 0, Math.PI * 2 * (1 - Math.min(1, cd / 1.8)));
-        ctx.stroke();
-      }
-      return;
-    default:
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-  }
-  ctx.closePath();
-  ctx.fill();
 }
 
 function drawHpBar(ctx, x, y, w, h, pct, color, glow = false) {

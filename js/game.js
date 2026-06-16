@@ -24,6 +24,8 @@ import {
   addTrail,
 } from "./vfx.js";
 import { mountSilhouette } from "./silhouettes.js";
+import { createGameAudio } from "./audio.js";
+import { updateEnemyFacing } from "./enemy-art.js";
 import {
   addFx,
   playSpaceVfx,
@@ -70,6 +72,7 @@ export class Game {
     this.message = "";
     this.lastTime = 0;
     this.paused = false;
+    this.audio = createGameAudio();
     initVfx(this);
 
     window.addEventListener("keydown", (e) => {
@@ -172,6 +175,7 @@ export class Game {
     this.setMenuMode(false);
     this.setRunControlsVisible(true);
     this.hideOverlay();
+    this.audio.play();
     this.prepareWave();
   }
 
@@ -187,6 +191,7 @@ export class Game {
     if (!this.isRunActive() || this.paused) return;
     this.paused = true;
     document.body.classList.add("game-paused");
+    this.audio.pause();
 
     const wrap = document.createElement("div");
     wrap.className = "pause-actions";
@@ -215,6 +220,7 @@ export class Game {
     if (!this.isRunActive()) return;
     this.paused = true;
     document.body.classList.add("game-paused");
+    this.audio.pause();
 
     const wrap = document.createElement("div");
     wrap.className = "pause-actions";
@@ -239,12 +245,14 @@ export class Game {
     document.body.classList.remove("game-paused");
     this.hideOverlay();
     this.lastTime = performance.now();
+    this.audio.resume();
     if (this.state === "scout") this.showScoutOverlay();
   }
 
   exitToHome() {
     this.paused = false;
     document.body.classList.remove("game-paused");
+    this.audio.stop();
     this.enemies = [];
     this.projectiles = [];
     this.enemyProjectiles = [];
@@ -390,6 +398,7 @@ export class Game {
     this.state = "win";
     this.paused = false;
     document.body.classList.remove("game-paused");
+    this.audio.stop();
     this.setMenuMode(true);
     this.setCombatUiVisible(false);
     this.setRunControlsVisible(false);
@@ -405,6 +414,7 @@ export class Game {
     this.state = "lose";
     this.paused = false;
     document.body.classList.remove("game-paused");
+    this.audio.stop();
     this.setMenuMode(true);
     this.setCombatUiVisible(false);
     this.setRunControlsVisible(false);
@@ -474,6 +484,8 @@ export class Game {
       zoneCd: 2.5,
       shootCd: 1.2,
       flankSide: Math.random() > 0.5 ? 1 : -1,
+      anim: Math.random() * Math.PI * 2,
+      faceAngle: Math.random() * Math.PI * 2,
     });
     this.clampEnemy(this.enemies[this.enemies.length - 1]);
     addRing(this, x, y, def.glow || def.color, 50);
@@ -1216,6 +1228,7 @@ export class Game {
         this.enemies.splice(i, 1);
         continue;
       }
+      updateEnemyFacing(e, p);
       this.updateEnemyAI(e, dt);
     }
 
