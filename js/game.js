@@ -109,6 +109,7 @@ export class Game {
     this.dpr = 1;
     this.accumulator = 0;
     this.lastZapTarget = null;
+    this.lastAttackSlot = "j";
     this.hudCache = {};
     this.setupCanvas();
     initVfx(this);
@@ -647,15 +648,27 @@ export class Game {
     this.paused = false;
     document.body.classList.remove("game-paused");
     this.audio.stop();
+    this.sfx.playClear();
     this.setMenuMode(true);
     this.setCombatUiVisible(false);
     this.setRunControlsVisible(false);
-    this.showOverlay("클리어", `${WAVE_COUNT}웨이브 끝. 한 판 약 5~8분.`, [
-      this.makePickBtn("다시 하기", "처음부터", () => {
+
+    const hero = document.createElement("div");
+    hero.className = "clear-hero";
+    hero.innerHTML = `
+      <img src="assets/images/kirito-clear.png" alt="검은 검사 승리" width="320" height="320" decoding="async" />
+      <p class="clear-hero-caption">링크 스타트 · 클리어</p>
+    `;
+
+    this.showOverlay(
+      "클리어",
+      `${WAVE_COUNT}웨이브 돌파. 검은 검사의 승리.`,
+      [hero, this.makePickBtn("다시 하기", "처음부터", () => {
         this.hideOverlay();
         this.showWelcome();
-      }),
-    ], "result");
+      })],
+      "result-win"
+    );
   }
 
   lose() {
@@ -886,7 +899,7 @@ export class Game {
     e.hp -= dmg;
     e.hp = Math.max(0, Math.round(e.hp * 10) / 10);
     if (e.hp < 0.05) e.hp = 0;
-    this.sfx.playHit(isSkill, e.type === "boss");
+    this.sfx.playHit(this.lastAttackSlot || "j", e.type === "boss");
     addShake(this, isSkill ? (e.type === "boss" ? 5 : 3) : 2);
     const ls = this.combatFx().lifesteal;
     if (ls && this.player?.hp > 0) {
@@ -963,6 +976,7 @@ export class Game {
 
     if (slot === 0) {
       if (p.spaceSwing > 0) return;
+      this.lastAttackSlot = "j";
       this.sfx.playSwing(this.champion?.spaceType);
       this.castSpace();
       p.spaceSwing = this.spaceInterval();
@@ -970,6 +984,7 @@ export class Game {
       this.flashSkillSlot(0);
     } else if (slot === 1) {
       if (p.skillCd > 0) return;
+      this.lastAttackSlot = "k";
       this.sfx.playSkill("primary");
       this.castPrimary();
       p.skillCd = c.skillCd * this.skillCdMult();
@@ -977,6 +992,7 @@ export class Game {
       this.flashSkillSlot(1);
     } else {
       if (p.skill2Cd > 0) return;
+      this.lastAttackSlot = "l";
       this.sfx.playSkill("secondary");
       this.castSecondary();
       p.skill2Cd = c.skill2Cd * this.skillCdMult();
