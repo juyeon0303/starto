@@ -60,11 +60,12 @@ const MELEE_SLASH_RANGE = 78;
 const MELEE_SLASH_ARC = 0.82;
 const STAB_RANGE = 92;
 const BASH_RADIUS = 58;
-const KITE_START = 130;
-const KITE_MAX_BOOST = 0.38;
+const KITE_START = 220;
+const KITE_MAX_BOOST = 0.22;
 const AUTO_ATTACK_ENABLED = false;
 const SKILL_RING_LEN = 226;
-const ZAP_REACH_BONUS = 48;
+const ZAP_REACH_BONUS = 62;
+const RANGED_LEASH = 58;
 const SIM_STEP = 1 / 60;
 const MAX_SIM_STEPS = 4;
 
@@ -522,7 +523,7 @@ export class Game {
     this.event = pickRandom(WAVE_EVENTS, 1)[0];
     this.eventSkill = this.event.id === "surge" ? 1.15 : 1;
     this.eventDefense = this.event.id === "iron" ? 0.88 : 1;
-    this.eventFog = this.event.id === "fog" ? 0.9 : 1;
+    this.eventFog = this.event.id === "fog" ? 0.94 : 1;
     this.scoutAugmentOptions = getScoutAugments(
       this.pendingComposition,
       this.runAugments.map((a) => a.id),
@@ -723,7 +724,7 @@ export class Game {
       hp: scaledHp,
       maxHp: scaledHp,
       speed,
-      damage: def.damage * (1 + (this.wave - 1) * 0.036),
+      damage: def.damage * (1 + (this.wave - 1) * 0.03),
       radius: def.radius,
       color: def.color,
       armor: def.armor || 0,
@@ -1009,6 +1010,17 @@ export class Game {
     return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
+  attackRange() {
+    const type = this.champion?.spaceType;
+    if (type === "bolt" || type === "shot") {
+      return this.basicRange() + RANGED_LEASH;
+    }
+    if (type === "zap") {
+      return this.basicRange() + ZAP_REACH_BONUS;
+    }
+    return this.basicRange();
+  }
+
   getBasicRangeVisual() {
     const range = this.basicRange();
     const type = this.champion?.spaceType ?? "slash";
@@ -1019,18 +1031,28 @@ export class Game {
         return { kind: "circle", range: STAB_RANGE };
       case "bash":
         return { kind: "circle", range: BASH_RADIUS };
+      case "bolt":
+      case "shot":
+        return {
+          kind: "circle",
+          range,
+          sweetSpot: range * 0.88,
+          extra: range + RANGED_LEASH,
+        };
       case "zap":
         return { kind: "circle", range, extra: range + ZAP_REACH_BONUS };
       default:
-        return { kind: "circle", range, sweetSpot: range * 0.72 };
+        return { kind: "circle", range, sweetSpot: range * 0.88 };
     }
   }
 
   basicRangeLabel() {
     const v = this.getBasicRangeVisual();
     const r = Math.round(v.range);
+    const type = this.champion?.spaceType;
     if (v.kind === "arc") return `근접 ${r}px`;
-    if (v.extra) return `사거리 ${r} · 전격 ${Math.round(v.extra)}px`;
+    if (v.extra && type === "zap") return `사거리 ${r} · 전격 ${Math.round(v.extra)}px`;
+    if (v.extra) return `사거리 ${r} · 최대 ${Math.round(v.extra)}px`;
     if (v.sweetSpot) return `사거리 ${r}px (풀딜 ${Math.round(v.sweetSpot)}px)`;
     return `사거리 ${r}px`;
   }
@@ -1049,10 +1071,12 @@ export class Game {
   }
 
   rangedFalloff(dist, range = this.basicRange()) {
-    if (dist <= range * 0.72) return 1;
-    if (dist >= range) return 0.58;
-    const t = (dist - range * 0.72) / (range * 0.28);
-    return 1 - t * 0.42;
+    const sweet = range * 0.88;
+    const outer = range + RANGED_LEASH;
+    if (dist <= sweet) return 1;
+    if (dist >= outer) return 0.76;
+    const t = (dist - sweet) / (outer - sweet);
+    return 1 - t * 0.24;
   }
 
   enemyChaseMul(e, p) {
@@ -1067,7 +1091,7 @@ export class Game {
     return {
       homing,
       homingTurn: homing ? (c?.spaceHomingTurn ?? 14) : 0,
-      maxTrackRange: this.basicRange() + 24,
+      maxTrackRange: this.attackRange() + 36,
       ...extra,
     };
   }
@@ -1077,8 +1101,9 @@ export class Game {
     const c = this.champion;
     const th = themeFor(c);
     const maxR = this.basicRange();
-    const near = this.nearestEnemy(maxR + ZAP_REACH_BONUS);
-    const nearDist = near ? Math.hypot(near.x - p.x, near.y - p.y) : maxR;
+    const acquireR = this.attackRange();
+    const near = this.nearestEnemy(acquireR);
+    const nearDist = near ? Math.hypot(near.x - p.x, near.y - p.y) : acquireR;
     const dmg = this.basicDamage(nearDist);
     const a = p.angle;
     this.lastZapTarget = null;
@@ -1096,16 +1121,17 @@ export class Game {
         addTrail(this, p.x, p.y, p.x + Math.cos(a) * 50, p.y + Math.sin(a) * 50, th.slash, 6);
         break;
       case "bolt": {
-        if (!near || nearDist > maxR) break;
+        if (!near || nearDist > acquireR) break;
+        p.angle = Math.atan2(near.y - p.y, near.x - p.x);
         this.pushFriendlyProjectile(
           p.x,
           p.y,
-          a,
-          620,
+          p.angle,
+          640,
           this.basicProjectileOpts({
             slot: "space",
             damage: dmg,
-            life: 0.5,
+            life: 0.62,
             radius: 8,
             color: th.glow,
           })
@@ -1123,18 +1149,21 @@ export class Game {
         this.dealDamage(dmg, p.x, p.y, BASH_RADIUS, 26);
         break;
       case "shot": {
-        if (!near || nearDist > maxR) break;
+        if (!near || nearDist > acquireR) break;
+        p.angle = Math.atan2(near.y - p.y, near.x - p.x);
         this.pushFriendlyProjectile(
           p.x,
           p.y,
-          a,
-          660,
+          p.angle,
+          700,
           this.basicProjectileOpts({
             slot: "space",
             damage: dmg,
-            life: 0.58,
+            life: 0.68,
             radius: 5,
             color: th.accent,
+            homing: false,
+            pierce: true,
           })
         );
         break;
@@ -1395,7 +1424,7 @@ export class Game {
     if (e.state === "idle") {
       this.aiChase(e, p, dt, slow * 0.7, chase);
       e.stateT += dt;
-      if (e.stateT > 1.35 && Math.hypot(p.x - e.x, p.y - e.y) < 260) {
+      if (e.stateT > 1.45 && Math.hypot(p.x - e.x, p.y - e.y) < 230) {
         e.state = "windup";
         e.stateT = 0;
         e.chargeAngle = Math.atan2(p.y - e.y, p.x - e.x);
@@ -1423,16 +1452,16 @@ export class Game {
   aiRanged(e, p, dt, slow, chase = 1) {
     const d = Math.hypot(p.x - e.x, p.y - e.y);
     const a = Math.atan2(p.y - e.y, p.x - e.x);
-    if (d > 210) {
+    if (d > 235) {
       e.x += Math.cos(a) * e.speed * slow * chase * dt;
       e.y += Math.sin(a) * e.speed * slow * chase * dt;
-    } else if (d < 150) {
+    } else if (d < 165) {
       e.x -= Math.cos(a) * e.speed * slow * chase * dt;
       e.y -= Math.sin(a) * e.speed * slow * chase * dt;
     }
     e.shootCd -= dt;
-    if (e.shootCd <= 0 && d < 320) {
-      e.shootCd = 1.8;
+    if (e.shootCd <= 0 && d < 290) {
+      e.shootCd = 2.05;
       const ang = Math.atan2(p.y - e.y, p.x - e.x);
       this.enemyProjectiles.push({
         x: e.x,
@@ -1542,7 +1571,7 @@ export class Game {
     }
 
     p.angle = mx || my ? p.moveAngle : Math.atan2(this.mouse.y - p.y, this.mouse.x - p.x);
-    if (this.enemies.length) this.aimAtNearestEnemy(this.basicRange() + 40);
+    if (this.enemies.length) this.aimAtNearestEnemy(this.attackRange() + 24);
     if (p.spaceSwing > 0) p.spaceSwing -= dt;
     if (this.keys.KeyJ && p.spaceSwing <= 0) this.useSkill(0);
     if (p.skillCd > 0) p.skillCd -= dt;

@@ -34,7 +34,16 @@ export const LOOT_BUFFS = [
     color: "#ba68c8",
     glow: "#ea80fc",
     desc: "J 피해·사거리 (이번 웨이브)",
-    fx: { basicBonus: 0.12, rangeBonus: 0.06 },
+    fx: { basicBonus: 0.1, rangeBonus: 0.1 },
+  },
+  {
+    id: "reach",
+    name: "장궁",
+    icon: "🏹",
+    color: "#81c784",
+    glow: "#c8e6c9",
+    desc: "J 사거리 증가 (이번 웨이브)",
+    fx: { rangeBonus: 0.12, basicBonus: 0.05 },
   },
 ];
 
@@ -46,7 +55,7 @@ const TEMP_FX_CAPS = {
   chargeReduce: 0.28,
   projReduce: 0.32,
   zoneReduce: 0.28,
-  rangeBonus: 0.14,
+  rangeBonus: 0.22,
 };
 
 export function mergeTempFx(current, add) {
@@ -103,7 +112,7 @@ export function rollLootKind(wave, enemyType) {
   if (enemyType === "boss") {
     return Math.random() < 0.45 ? "heal" : "buff";
   }
-  const healBias = wave <= 3 ? 0.62 : wave <= 6 ? 0.48 : 0.38;
+  const healBias = wave <= 3 ? 0.55 : wave <= 6 ? 0.42 : 0.35;
   return Math.random() < healBias ? "heal" : "buff";
 }
 
@@ -116,6 +125,9 @@ export function pickLootBuff(wave) {
       name: "강화 분노",
       fx: { skillBonus: 0.14, basicBonus: 0.1 },
     });
+  }
+  if (wave >= 3) {
+    pool.push(LOOT_BUFFS.find((b) => b.id === "reach") || LOOT_BUFFS[3]);
   }
   return pool[Math.floor(Math.random() * pool.length)];
 }
