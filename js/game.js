@@ -53,6 +53,9 @@ const KITE_START = 130;
 const KITE_MAX_BOOST = 0.38;
 const AUTO_ATTACK_ENABLED = false;
 const SKILL_RING_LEN = 226;
+const ZAP_REACH_BONUS = 48;
+const SIM_STEP = 1 / 60;
+const MAX_SIM_STEPS = 4;
 
 export class Game {
   constructor(canvas, ui) {
@@ -87,6 +90,11 @@ export class Game {
     this.paused = false;
     this.audio = createGameAudio();
     this.sfx = createGameSfx();
+    this.dpr = 1;
+    this.accumulator = 0;
+    this.lastZapTarget = null;
+    this.hudCache = {};
+    this.setupCanvas();
     initVfx(this);
 
     window.addEventListener("keydown", (e) => {
@@ -126,6 +134,16 @@ export class Game {
 
     this.showWelcome();
     requestAnimationFrame((t) => this.loop(t));
+  }
+
+  setupCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.dpr = dpr;
+    this.canvas.width = Math.round(W * dpr);
+    this.canvas.height = Math.round(H * dpr);
+    this.canvas.style.width = `${W}px`;
+    this.canvas.style.height = `${H}px`;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
   setMenuMode(on) {
@@ -612,13 +630,41 @@ export class Game {
     let best = null;
     let bestD = maxDist;
     for (const e of this.enemies) {
+      if (e.hp <= 0) continue;
       const d = Math.hypot(e.x - x, e.y - y);
-      if (d < bestD) {
+      if (d <= maxDist && d < bestD) {
         bestD = d;
         best = e;
       }
     }
     return best;
+  }
+
+  pickZapTarget(reach) {
+    const p = this.player;
+    if (!p) return null;
+
+    const hitReach = reach + ZAP_REACH_BONUS + p.radius;
+    let best = null;
+    let bestScore = Infinity;
+
+    for (const e of this.enemies) {
+      if (e.hp <= 0) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      const edge = d - e.radius - p.radius;
+      if (edge > hitReach) continue;
+
+      const ea = Math.atan2(e.y - p.y, e.x - p.x);
+      const diff = Math.abs(normAngle(ea - p.angle));
+      const score = edge + diff * 90;
+      if (score < bestScore) {
+        bestScore = score;
+        best = e;
+      }
+    }
+
+    if (best) return best;
+    return this.nearestEnemyFrom(p.x, p.y, hitReach);
   }
 
   aimAtNearestEnemy(maxDist = Infinity) {
@@ -853,10 +899,11 @@ export class Game {
     const c = this.champion;
     const th = themeFor(c);
     const maxR = this.basicRange();
-    const near = this.nearestEnemy(maxR + 20);
+    const near = this.nearestEnemy(maxR + ZAP_REACH_BONUS);
     const nearDist = near ? Math.hypot(near.x - p.x, near.y - p.y) : maxR;
     const dmg = this.basicDamage(nearDist);
     const a = p.angle;
+    this.lastZapTarget = null;
 
     switch (c.spaceType) {
       case "slash":
@@ -915,11 +962,12 @@ export class Game {
         break;
       }
       case "zap": {
-        const t = this.nearestEnemy(maxR);
+        const t = this.pickZapTarget(maxR);
+        this.lastZapTarget = t;
         if (!t) break;
+        p.angle = Math.atan2(t.y - p.y, t.x - p.x);
         const d = Math.hypot(t.x - p.x, t.y - p.y);
-        if (d > maxR) break;
-        this.damageEnemy(t, dmg * (c.spaceZapMult ?? 1), true);
+        this.damageEnemy(t, this.basicDamage(d) * (c.spaceZapMult ?? 1), true);
         addTrail(this, p.x, p.y, t.x, t.y, th.glow, 5);
         break;
       }
@@ -1410,10 +1458,24 @@ export class Game {
   }
 
   loop(now) {
-    const dt = Math.min(0.033, (now - this.lastTime) / 1000 || 0);
+    if (!this.lastTime) this.lastTime = now;
+    const frameDt = Math.min(0.05, (now - this.lastTime) / 1000 || 0);
     this.lastTime = now;
-    updateVfx(this, this.paused ? 0 : dt);
-    if (this.state === "combat" && !this.paused) this.updateCombat(dt);
+
+    if (this.paused || this.state !== "combat") {
+      this.accumulator = 0;
+      updateVfx(this, 0);
+    } else {
+      this.accumulator = (this.accumulator || 0) + frameDt;
+      let steps = 0;
+      while (this.accumulator >= SIM_STEP && steps < MAX_SIM_STEPS) {
+        updateVfx(this, SIM_STEP);
+        this.updateCombat(SIM_STEP);
+        this.accumulator -= SIM_STEP;
+        steps += 1;
+      }
+    }
+
     if (this.state === "combat" && !this.paused) this.updateHud();
     try {
       this.draw();
@@ -1426,7 +1488,8 @@ export class Game {
 
   resetCanvas() {
     const ctx = this.ctx;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    const dpr = this.dpr || 1;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
     ctx.shadowBlur = 0;
@@ -1452,7 +1515,11 @@ export class Game {
     if (this.champion && this.state === "combat") {
       parts.push(this.champion.name);
     }
-    this.ui.waveInfo.textContent = parts.join(" · ") || "—";
+    const waveInfo = parts.join(" · ") || "—";
+    if (this.hudCache.waveInfo !== waveInfo) {
+      this.hudCache.waveInfo = waveInfo;
+      this.ui.waveInfo.textContent = waveInfo;
+    }
 
     if (!this.player || this.state !== "combat") return;
 
@@ -1460,25 +1527,45 @@ export class Game {
     const c = this.champion;
     const hpPct = Math.max(0, p.hp / p.maxHp);
     const hpBody = this.ui.combatUi?.querySelector(".combat-hp-body");
+    const hpPctLabel = `${Math.round(hpPct * 100)}%`;
+    const hpText = `${Math.ceil(p.hp)} / ${p.maxHp}`;
 
-    if (this.ui.combatHpFill) {
+    if (this.ui.combatHpFill && this.hudCache.hpFill !== hpPct) {
+      this.hudCache.hpFill = hpPct;
       this.ui.combatHpFill.style.width = `${hpPct * 100}%`;
     }
     if (this.ui.combatHpTrail) {
       if (p.hpTrail == null) p.hpTrail = hpPct;
       p.hpTrail += (hpPct - p.hpTrail) * 0.2;
-      this.ui.combatHpTrail.style.width = `${p.hpTrail * 100}%`;
+      if (this.hudCache.hpTrail !== p.hpTrail) {
+        this.hudCache.hpTrail = p.hpTrail;
+        this.ui.combatHpTrail.style.width = `${p.hpTrail * 100}%`;
+      }
     }
-    if (this.ui.combatHpText) {
-      this.ui.combatHpText.textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
+    if (this.ui.combatHpText && this.hudCache.hpText !== hpText) {
+      this.hudCache.hpText = hpText;
+      this.ui.combatHpText.textContent = hpText;
     }
-    if (this.ui.combatHpPct) {
-      this.ui.combatHpPct.textContent = `${Math.round(hpPct * 100)}%`;
+    if (this.ui.combatHpPct && this.hudCache.hpPct !== hpPctLabel) {
+      this.hudCache.hpPct = hpPctLabel;
+      this.ui.combatHpPct.textContent = hpPctLabel;
     }
     if (hpBody) {
-      hpBody.classList.toggle("hp-danger", hpPct <= 0.25);
-      hpBody.classList.toggle("hp-warn", hpPct > 0.25 && hpPct <= 0.5);
-      hpBody.classList.toggle("hp-ok", hpPct > 0.5);
+      const danger = hpPct <= 0.25;
+      const warn = hpPct > 0.25 && hpPct <= 0.5;
+      const ok = hpPct > 0.5;
+      if (this.hudCache.hpDanger !== danger) {
+        this.hudCache.hpDanger = danger;
+        hpBody.classList.toggle("hp-danger", danger);
+      }
+      if (this.hudCache.hpWarn !== warn) {
+        this.hudCache.hpWarn = warn;
+        hpBody.classList.toggle("hp-warn", warn);
+      }
+      if (this.hudCache.hpOk !== ok) {
+        this.hudCache.hpOk = ok;
+        hpBody.classList.toggle("hp-ok", ok);
+      }
     }
 
     this.updateAugmentStrip();

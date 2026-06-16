@@ -25,6 +25,11 @@ export const PAD = 40;
 export const W = 960;
 export const H = 560;
 
+const MAX_FLOAT_TEXTS = 18;
+const MAX_RINGS = 12;
+const MAX_SPARKS = 40;
+const MAX_PARTICLES = 24;
+
 const ARENA_IMG = new Image();
 ARENA_IMG.src = "assets/images/sao-bg.jpg";
 let arenaImgReady = false;
@@ -64,10 +69,16 @@ export function addFlash(game, color, amount = 0.35) {
 
 export function addFloatText(game, x, y, text, color = "#fff", size = 14) {
   game.floatTexts.push({ x, y: y - 8, text, color, size, t: 0.65, vy: -42 });
+  if (game.floatTexts.length > MAX_FLOAT_TEXTS) {
+    game.floatTexts.splice(0, game.floatTexts.length - MAX_FLOAT_TEXTS);
+  }
 }
 
 export function addRing(game, x, y, color, maxR = 60) {
   game.rings.push({ x, y, color, r: 8, maxR, t: 0.45 });
+  if (game.rings.length > MAX_RINGS) {
+    game.rings.splice(0, game.rings.length - MAX_RINGS);
+  }
 }
 
 export function addSparks(game, x, y, color, n = 8) {
@@ -84,12 +95,18 @@ export function addSparks(game, x, y, color, n = 8) {
       size: 2 + Math.random() * 2,
     });
   }
+  if (game.sparks.length > MAX_SPARKS) {
+    game.sparks.splice(0, game.sparks.length - MAX_SPARKS);
+  }
 }
 
 export function spawnBurst(game, x, y, color, big = false) {
-  addSparks(game, x, y, color, big ? 18 : 10);
+  addSparks(game, x, y, color, big ? 14 : 8);
   if (big) addRing(game, x, y, color, 90);
   game.particles.push({ x, y, t: big ? 0.5 : 0.32, color, big });
+  if (game.particles.length > MAX_PARTICLES) {
+    game.particles.splice(0, game.particles.length - MAX_PARTICLES);
+  }
 }
 
 export function updateVfx(game, dt) {
@@ -142,15 +159,17 @@ export function updateVfx(game, dt) {
 }
 
 export function renderFrame(game, ctx) {
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const dpr = game.dpr || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
   ctx.shadowBlur = 0;
   ctx.setLineDash([]);
   ctx.clearRect(0, 0, W, H);
 
-  const sx = game.shake ? (Math.random() - 0.5) * game.shake * 2.2 : 0;
-  const sy = game.shake ? (Math.random() - 0.5) * game.shake * 2.2 : 0;
+  const shake = game.shake || 0;
+  const sx = shake ? Math.sin(game.bgTime * 52) * shake * 1.15 : 0;
+  const sy = shake ? Math.cos(game.bgTime * 47) * shake * 1.15 : 0;
 
   ctx.save();
   ctx.translate(sx, sy);
@@ -173,7 +192,7 @@ export function renderFrame(game, ctx) {
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 3;
       ctx.shadowColor = r.color;
-      ctx.shadowBlur = 16;
+      ctx.shadowBlur = 10;
       drawIsoCircle(ctx, r.x, r.y, r.r, 0);
       ctx.stroke();
       endIsoCircle(ctx);
@@ -257,7 +276,7 @@ export function renderFrame(game, ctx) {
       ctx.globalAlpha = s.t;
       ctx.fillStyle = s.color;
       ctx.shadowColor = s.color;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 5;
       ctx.fillRect(p.x, p.y, s.size, s.size);
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
@@ -289,7 +308,7 @@ export function renderFrame(game, ctx) {
     ctx.font = `bold ${f.size}px Syne, Malgun Gothic, sans-serif`;
     ctx.fillStyle = f.color;
     ctx.shadowColor = f.color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 6;
     ctx.fillText(f.text, p.x, p.y);
     ctx.shadowBlur = 0;
     ctx.globalAlpha = 1;

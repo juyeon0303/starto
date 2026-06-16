@@ -209,10 +209,7 @@ export function playSpaceVfx(game, champ, p, angle) {
       });
       break;
     case "zap": {
-      const target = game.enemies.reduce((best, e) => {
-        const d = Math.hypot(e.x - p.x, e.y - p.y);
-        return !best || d < best.d ? { e, d } : best;
-      }, null)?.e;
+      const target = game.lastZapTarget;
       if (target) {
         addFx(game, {
           kind: "lightning",
