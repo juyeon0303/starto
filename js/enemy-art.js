@@ -1,5 +1,15 @@
 import { ENEMIES } from "./data.js";
 import { worldToScreen } from "./iso.js";
+import {
+  drawBow,
+  drawHalberd,
+  drawQuiver,
+  drawSpear,
+  drawStaff,
+  drawTowerShield,
+  drawTwinDaggers,
+  drawWarMace,
+} from "./weapon-art.js";
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
@@ -13,11 +23,6 @@ function shade(hex, amt) {
   return `rgb(${r},${g},${b})`;
 }
 
-function weaponEdge(ctx, width = 1.25) {
-  ctx.strokeStyle = "rgba(255,255,255,0.92)";
-  ctx.lineWidth = width;
-  ctx.stroke();
-}
 
 function drawEnemyCore(ctx, r, color, glow) {
   ctx.fillStyle = shade(color, -35);
@@ -140,128 +145,38 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
 
 function drawCharger(ctx, e, glow, time, phase) {
   const r = e.radius;
+  const s = r / 13;
   drawEnemyCore(ctx, r, e.color, glow);
-
-  ctx.fillStyle = shade(e.color, -20);
-  ctx.beginPath();
-  ctx.moveTo(r * 0.15, -r * 0.2);
-  ctx.lineTo(r * 1.55, -r * 0.08);
-  ctx.lineTo(r * 1.65, r * 0.08);
-  ctx.lineTo(r * 0.15, r * 0.2);
-  ctx.closePath();
-  ctx.fill();
-  weaponEdge(ctx);
-
-  ctx.fillStyle = "#cfd8dc";
-  ctx.fillRect(r * 0.05, -r * 0.34, r * 0.14, r * 0.68);
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(r * 0.05, -r * 0.34, r * 0.14, r * 0.68);
-
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.moveTo(r * 1.55, -r * 0.22);
-  ctx.lineTo(r * 1.85, 0);
-  ctx.lineTo(r * 1.55, r * 0.22);
-  ctx.closePath();
-  ctx.fill();
-  weaponEdge(ctx, 1);
-
-  ctx.globalAlpha = 0.35 + Math.sin(time * 8 + phase) * 0.15;
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(r * 1.85, -r * 0.35);
-  ctx.lineTo(r * 2.05, 0);
-  ctx.lineTo(r * 1.85, r * 0.35);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
+  drawSpear(ctx, { glow, color: e.color, scale: s, time, phase });
 }
 
 function drawArcher(ctx, e, glow, time) {
   const r = e.radius;
+  const s = r / 13;
   drawEnemyCore(ctx, r * 0.95, e.color, glow);
-
-  ctx.fillStyle = shade(e.color, -45);
-  ctx.fillRect(-r * 0.55, -r * 0.15, r * 0.35, r * 0.55);
-
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(r * 0.42, 0, r * 1.05, -1.25, 1.25);
-  weaponEdge(ctx, 1.5);
-
-  ctx.strokeStyle = "#8d6e63";
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.65, 0);
-  ctx.lineTo(r * 1.35, 0);
-  ctx.stroke();
-  weaponEdge(ctx);
-
-  ctx.fillStyle = "#eceff1";
-  ctx.beginPath();
-  ctx.moveTo(r * 1.28, 0);
-  ctx.lineTo(r * 1.62, -r * 0.1);
-  ctx.lineTo(r * 1.62, r * 0.1);
-  ctx.closePath();
-  ctx.fill();
-  weaponEdge(ctx);
-
-  ctx.fillStyle = glow;
-  ctx.globalAlpha = 0.5 + Math.sin(time * 6) * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(r * 0.42 + r * 1.05 * Math.cos(-0.4), r * 1.05 * Math.sin(-0.4));
-  ctx.lineTo(r * 0.42 + r * 1.05 * Math.cos(0.4), r * 1.05 * Math.sin(0.4));
-  ctx.lineTo(r * 1.35, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.globalAlpha = 1;
+  drawQuiver(ctx, { x: -7, y: -12, color: shade(e.color, -30), scale: s * 0.9 });
+  drawBow({ cx: 8, cy: 0, r: 20, glow, time, scale: s });
 }
 
 function drawBulwark(ctx, e, glow) {
   const r = e.radius;
+  const s = r / 13;
   drawEnemyCore(ctx, r * 0.85, e.color, glow);
-
-  ctx.fillStyle = shade(e.color, -40);
-  ctx.fillRect(-r * 1.35, -r * 1.05, r * 0.72, r * 2.1);
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 2.5;
-  ctx.strokeRect(-r * 1.35, -r * 1.05, r * 0.72, r * 2.1);
-  weaponEdge(ctx, 1.5);
-
-  ctx.fillStyle = glow;
-  ctx.globalAlpha = 0.75;
-  ctx.fillRect(-r * 1.05, -r * 0.35, r * 0.38, r * 0.7);
-  ctx.globalAlpha = 1;
-
-  ctx.strokeStyle = shade(e.color, 35);
-  ctx.lineWidth = 1;
-  for (let i = -1; i <= 1; i++) {
-    ctx.beginPath();
-    ctx.moveTo(-r * 1.22, i * r * 0.38);
-    ctx.lineTo(-r * 0.72, i * r * 0.38);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = "#b0bec5";
-  ctx.beginPath();
-  ctx.moveTo(r * 0.35, -r * 0.55);
-  ctx.lineTo(r * 0.35, r * 0.55);
-  ctx.lineTo(r * 1.15, r * 0.35);
-  ctx.lineTo(r * 1.15, -r * 0.35);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 1.5;
-  weaponEdge(ctx);
-
-  ctx.fillStyle = glow;
-  ctx.fillRect(r * 0.55, -r * 0.75, r * 0.12, r * 1.5);
+  drawTowerShield({
+    x: -28,
+    y: -16,
+    w: 14,
+    h: 32,
+    glow,
+    color: shade(e.color, -40),
+    scale: s,
+  });
+  drawWarMace({ glow, accent: e.color, scale: s * 0.95 });
 }
 
 function drawSkirmisher(ctx, e, glow, time, phase) {
   const r = e.radius;
+  const s = r / 13;
   drawEnemyCore(ctx, r * 0.82, e.color, glow);
 
   ctx.fillStyle = shade(e.color, -55);
@@ -274,38 +189,12 @@ function drawSkirmisher(ctx, e, glow, time, phase) {
   ctx.fill();
 
   const sway = Math.sin(time * 6 + phase) * 0.22;
-  ctx.fillStyle = "#eceff1";
-  ctx.beginPath();
-  ctx.moveTo(r * (0.55 + sway), r * 0.05);
-  ctx.lineTo(r * (1.45 + sway), r * 0.42);
-  ctx.lineTo(r * (0.95 + sway), r * 0.58);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 1.5;
-  weaponEdge(ctx);
-
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.moveTo(r * (0.55 - sway), -r * 0.05);
-  ctx.lineTo(r * (1.45 - sway), -r * 0.42);
-  ctx.lineTo(r * (0.95 - sway), -r * 0.58);
-  ctx.closePath();
-  ctx.fill();
-  weaponEdge(ctx);
-
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(r * (0.95 + sway), r * 0.58);
-  ctx.lineTo(r * (1.45 + sway), r * 0.42);
-  ctx.moveTo(r * (0.95 - sway), -r * 0.58);
-  ctx.lineTo(r * (1.45 - sway), -r * 0.42);
-  ctx.stroke();
+  drawTwinDaggers(ctx, { glow, scale: s, sway });
 }
 
 function drawCaster(ctx, e, glow, time, phase) {
   const r = e.radius;
+  const s = r / 13;
   drawEnemyCore(ctx, r, e.color, glow);
 
   ctx.fillStyle = shade(e.color, -35);
@@ -316,30 +205,16 @@ function drawCaster(ctx, e, glow, time, phase) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "#8d6e63";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(r * 0.35, r * 0.55);
-  ctx.lineTo(r * 0.35, -r * 1.35);
-  ctx.stroke();
-  weaponEdge(ctx, 1.5);
-
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(r * 0.35, -r * 1.35, r * 0.28, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  drawStaff({ x: 4, yTop: -30, yBot: 8, glow, scale: s });
 
   for (let i = 0; i < 3; i++) {
     const a = time * 2 + phase + (i * Math.PI * 2) / 3;
-    const ox = r * 0.35 + Math.cos(a) * r * 0.55;
-    const oy = -r * 1.35 + Math.sin(a) * r * 0.35;
+    const ox = 4 * s + Math.cos(a) * 7 * s;
+    const oy = -30 * s + Math.sin(a) * 4 * s;
     ctx.fillStyle = glow;
     ctx.globalAlpha = 0.55 + Math.sin(time * 5 + i) * 0.25;
     ctx.beginPath();
-    ctx.arc(ox, oy, 2.5, 0, Math.PI * 2);
+    ctx.arc(ox, oy, 2.5 * s, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
@@ -347,6 +222,7 @@ function drawCaster(ctx, e, glow, time, phase) {
 
 function drawBoss(ctx, e, glow, time, phase) {
   const r = e.radius;
+  const s = r / 16;
   drawEnemyCore(ctx, r * 1.05, e.color, glow);
 
   ctx.fillStyle = shade(e.color, -30);
@@ -368,27 +244,7 @@ function drawBoss(ctx, e, glow, time, phase) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "#cfd8dc";
-  ctx.beginPath();
-  ctx.moveTo(r * 0.25, -r * 0.35);
-  ctx.lineTo(r * 0.25, r * 0.45);
-  ctx.lineTo(r * 1.65, r * 0.15);
-  ctx.lineTo(r * 1.75, -r * 0.05);
-  ctx.lineTo(r * 1.45, -r * 0.55);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 2;
-  weaponEdge(ctx, 1.5);
-
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.moveTo(r * 1.65, -r * 0.55);
-  ctx.lineTo(r * 2.05, -r * 0.15);
-  ctx.lineTo(r * 1.65, r * 0.25);
-  ctx.closePath();
-  ctx.fill();
-  weaponEdge(ctx);
+  drawHalberd(ctx, { glow, color: e.color, scale: s * 1.15 });
 
   ctx.globalAlpha = 0.2 + Math.sin(time * 3 + phase) * 0.1;
   ctx.strokeStyle = glow;
@@ -405,9 +261,7 @@ function drawBoss(ctx, e, glow, time, phase) {
 
 function drawGeneric(ctx, e, glow) {
   drawEnemyCore(ctx, e.radius, e.color, glow);
-  ctx.fillStyle = glow;
-  ctx.fillRect(e.radius * 0.2, -e.radius * 0.12, e.radius * 0.9, e.radius * 0.24);
-  weaponEdge(ctx);
+  drawSpear(ctx, { glow, color: e.color, scale: e.radius / 13, time: 0, phase: 0 });
 }
 
 export function updateEnemyFacing(e, player) {

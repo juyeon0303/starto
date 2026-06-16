@@ -1,5 +1,18 @@
 /** 챔프별 테마 · 인게임 실루엣 · 스킬 연출 */
 import { worldToScreen, entityLift } from "./iso.js";
+import {
+  drawBow,
+  drawHalberd,
+  drawLightningStaff,
+  drawMagicBolt,
+  drawQuiver,
+  drawSpear,
+  drawStaff,
+  drawSword,
+  drawTowerShield,
+  drawTwinDaggers,
+  drawWarMace,
+} from "./weapon-art.js";
 
 export const CHAMP_THEMES = {
   blade: {
@@ -737,12 +750,6 @@ function drawChampHead(ctx, champId, color, glow) {
   ctx.strokeStyle = glow;
   ctx.lineWidth = 1.2;
   ctx.stroke();
-
-  ctx.fillStyle = "#101820";
-  ctx.beginPath();
-  ctx.arc(-3, -11, 1.8, 0, Math.PI * 2);
-  ctx.arc(3, -11, 1.8, 0, Math.PI * 2);
-  ctx.fill();
 }
 
 function drawChampCore(ctx, champId, color, glow) {
@@ -756,12 +763,6 @@ function shadeHex(hex, amt) {
   const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
   const b = Math.max(0, Math.min(255, (n & 255) + amt));
   return `rgb(${r},${g},${b})`;
-}
-
-function weaponHighlight(ctx, width = 1.2) {
-  ctx.strokeStyle = "rgba(255,255,255,0.9)";
-  ctx.lineWidth = width;
-  ctx.stroke();
 }
 
 function drawChampBody(ctx, champId, time, ghost = false) {
@@ -794,27 +795,7 @@ function drawChampBody(ctx, champId, time, ghost = false) {
 function drawChampWeapons(ctx, champId, time, color, glow) {
   switch (champId) {
     case "blade":
-      ctx.fillStyle = "#5d4037";
-      ctx.fillRect(-5, 2, 10, 12);
-      ctx.fillStyle = "#eceff1";
-      ctx.beginPath();
-      ctx.moveTo(8, -2);
-      ctx.lineTo(42, 0);
-      ctx.lineTo(8, 2);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
-      ctx.fillStyle = glow;
-      ctx.fillRect(6, -5, 4, 10);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(8, -14);
-      ctx.lineTo(36, -2);
-      ctx.lineTo(8, 10);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx, 1.5);
+      drawSword(ctx, { glow, accent: color, scale: 1 });
       break;
     case "mage":
       ctx.fillStyle = shadeHex(color, -25);
@@ -824,99 +805,23 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
       ctx.lineTo(0, -6);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = "#6d4c41";
-      ctx.lineWidth = 3.5;
-      ctx.beginPath();
-      ctx.moveTo(-14, 8);
-      ctx.lineTo(-14, -28);
-      ctx.stroke();
-      weaponHighlight(ctx, 1.5);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(-14, -28, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = "#fff";
-      ctx.globalAlpha = 0.92;
-      ctx.beginPath();
-      ctx.arc(18, -4, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = glow;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(18, -4);
-      ctx.lineTo(30, -16);
-      ctx.stroke();
+      drawStaff(ctx, { x: -14, yTop: -30, yBot: 8, glow, scale: 1 });
+      drawMagicBolt(ctx, { x: 18, y: -4, glow, scale: 1 });
       break;
     case "rogue":
-      ctx.fillStyle = "#eceff1";
-      ctx.beginPath();
-      ctx.moveTo(14, 4);
-      ctx.lineTo(34, 10);
-      ctx.lineTo(18, 12);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.moveTo(14, -4);
-      ctx.lineTo(34, -10);
-      ctx.lineTo(18, -12);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
+      drawTwinDaggers(ctx, { glow, scale: 1 });
       break;
     case "guardian":
       ctx.fillStyle = shadeHex(color, -20);
       ctx.fillRect(-10, -4, 20, 18);
-      ctx.fillStyle = "#546e7a";
-      ctx.fillRect(-28, -16, 14, 32);
-      ctx.strokeStyle = glow;
-      ctx.lineWidth = 2.5;
-      ctx.strokeRect(-28, -16, 14, 32);
-      weaponHighlight(ctx, 1.5);
-      ctx.fillStyle = glow;
-      ctx.fillRect(-22, -6, 6, 12);
-      ctx.fillStyle = "#cfd8dc";
-      ctx.beginPath();
-      ctx.moveTo(8, -6);
-      ctx.lineTo(8, 10);
-      ctx.lineTo(32, 6);
-      ctx.lineTo(32, -2);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
-      ctx.fillStyle = color;
-      ctx.fillRect(10, -12, 6, 20);
+      drawTowerShield(ctx, { x: -28, y: -16, w: 14, h: 32, glow, color: "#546e7a", scale: 1 });
+      drawWarMace(ctx, { glow, accent: color, scale: 1 });
       break;
     case "archer":
       ctx.fillStyle = color;
       ctx.fillRect(-5, -2, 10, 16);
-      ctx.strokeStyle = glow;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(10, 0, 22, -1.25, 1.25);
-      weaponHighlight(ctx, 1.5);
-      ctx.strokeStyle = "#8d6e63";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(-14, 0);
-      ctx.lineTo(28, 0);
-      ctx.stroke();
-      weaponHighlight(ctx);
-      ctx.fillStyle = "#eceff1";
-      ctx.beginPath();
-      ctx.moveTo(26, 0);
-      ctx.lineTo(36, -4);
-      ctx.lineTo(36, 4);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
-      ctx.fillStyle = shadeHex(color, -30);
-      ctx.fillRect(-8, -14, 6, 10);
+      drawBow(ctx, { cx: 10, cy: 0, r: 22, glow, time, scale: 1 });
+      drawQuiver(ctx, { x: -8, y: -14, color: shadeHex(color, -30), scale: 1 });
       break;
     case "storm":
       ctx.fillStyle = color;
@@ -926,43 +831,10 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
       ctx.lineTo(0, -8);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = "#6d4c41";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(6, 8);
-      ctx.lineTo(6, -26);
-      ctx.stroke();
-      weaponHighlight(ctx, 1.5);
-      ctx.strokeStyle = glow;
-      ctx.lineWidth = 2.5;
-      for (let i = 0; i < 3; i++) {
-        const ox = 6 + (-8 + i * 8);
-        ctx.globalAlpha = 0.55 + Math.sin(time * 5 + i) * 0.3;
-        ctx.beginPath();
-        ctx.moveTo(ox, -26);
-        ctx.lineTo(ox + 5, -14);
-        ctx.lineTo(ox - 3, -10);
-        ctx.lineTo(ox + 7, 0);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(6, -26, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
+      drawLightningStaff(ctx, { glow, color, time, scale: 1 });
       break;
     default:
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(8, -2);
-      ctx.lineTo(36, 0);
-      ctx.lineTo(8, 2);
-      ctx.closePath();
-      ctx.fill();
-      weaponHighlight(ctx);
+      drawSword(ctx, { glow, accent: color, scale: 0.9 });
   }
 }
 

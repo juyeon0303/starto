@@ -865,6 +865,9 @@ export class Game {
       radius: opts.radius ?? 6,
       color: opts.color ?? themeFor(this.champion).glow,
       pierce: opts.pierce ?? false,
+      pierceMax: opts.pierceMax ?? null,
+      pierceFalloff: opts.pierceFalloff ?? 1,
+      hitSet: opts.pierce ? new Set() : null,
       friendly: true,
       homing: opts.homing !== false,
       homingTurn: opts.homingTurn ?? 22,
@@ -1278,15 +1281,18 @@ export class Game {
         playPrimaryVfx(this, c, p);
         break;
       case "pierce": {
-        const pierceSpd = c.id === "archer" ? 520 : 580;
-        const pierceMult = c.id === "archer" ? 0.9 : 1;
+        const pierceSpd = c.id === "archer" ? 500 : 580;
+        const pierceMult = c.id === "archer" ? 0.52 : 1;
         this.pushFriendlyProjectile(p.x, p.y, p.angle, pierceSpd, {
           slot: "primary",
           damage: dmg * pierceMult,
-          life: 1.2,
-          radius: 7,
+          life: c.id === "archer" ? 0.95 : 1.2,
+          radius: c.id === "archer" ? 6 : 7,
           color: th.accent,
           pierce: true,
+          pierceMax: c.id === "archer" ? 3 : null,
+          pierceFalloff: c.id === "archer" ? 0.78 : 1,
+          homing: false,
         });
         break;
       }
@@ -1659,7 +1665,19 @@ export class Game {
       if (pr.life <= 0) return false;
       for (const e of this.enemies) {
         if (Math.hypot(e.x - pr.x, e.y - pr.y) < e.radius + pr.radius) {
-          this.damageEnemy(e, pr.damage, pr.friendly);
+          if (pr.hitSet?.has(e)) continue;
+          let hitDmg = pr.damage;
+          if (pr.pierce && pr.hitSet) {
+            const n = pr.hitSet.size;
+            if (pr.pierceFalloff != null && pr.pierceFalloff !== 1) {
+              hitDmg *= Math.pow(pr.pierceFalloff, n);
+            }
+            pr.hitSet.add(e);
+            this.damageEnemy(e, hitDmg, pr.friendly);
+            if (pr.pierceMax != null && pr.hitSet.size >= pr.pierceMax) return false;
+            continue;
+          }
+          this.damageEnemy(e, hitDmg, pr.friendly);
           if (!pr.pierce) return false;
         }
       }
