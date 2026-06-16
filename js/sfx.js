@@ -1,5 +1,5 @@
 /** 전투 효과음 — 메이플스토리 스타일 (J/K/L 구분) */
-const SFX_VOL = 0.55;
+const SFX_VOL = 0.92;
 
 export function createGameSfx() {
   return new GameSfx();
@@ -16,13 +16,17 @@ class GameSfx {
   }
 
   ensure() {
-    if (this.ctx) return true;
+    if (this.ctx) {
+      this.resume();
+      return true;
+    }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     this.ctx = new AC();
     this.bus = this.ctx.createGain();
     this.bus.gain.value = SFX_VOL;
     this.bus.connect(this.ctx.destination);
+    this.resume();
     return true;
   }
 
@@ -37,112 +41,106 @@ class GameSfx {
   /** J 연타 — 스윙 */
   playSwing(spaceType) {
     if (!this.ensure()) return;
-    this.resume();
     const now = performance.now();
-    if (now - this.lastSwing < 40) return;
+    if (now - this.lastSwing < 35) return;
     this.lastSwing = now;
 
     const when = this.t();
     const ranged = spaceType === "bolt" || spaceType === "shot" || spaceType === "zap";
 
     if (ranged) {
-      this.mapleSwish(880, 520, 0.05, 0.09, when);
-      this.tonePop(1040 + Math.random() * 60, 0.035, 0.07, "square", when + 0.02);
+      this.mapleSwish(880, 520, 0.055, 0.16, when);
+      this.tonePop(1040 + Math.random() * 60, 0.04, 0.14, "square", when + 0.02);
     } else if (spaceType === "bash") {
-      this.mapleSwish(420, 160, 0.07, 0.13, when);
-      this.thump(140, 0.12, 0.07, when + 0.03);
+      this.mapleSwish(420, 160, 0.075, 0.22, when);
+      this.thump(140, 0.2, 0.08, when + 0.03);
     } else if (spaceType === "slash") {
-      this.mapleSwish(720, 280, 0.06, 0.11, when);
-      this.tonePop(520, 0.04, 0.08, "triangle", when + 0.025);
-      this.tonePop(780, 0.03, 0.05, "sine", when + 0.04);
+      this.mapleSwish(720, 280, 0.065, 0.2, when);
+      this.tonePop(520, 0.045, 0.15, "triangle", when + 0.025);
+      this.tonePop(780, 0.035, 0.1, "sine", when + 0.04);
     } else {
-      this.mapleSwish(640, 220, 0.055, 0.1, when);
-      this.tonePop(680 + Math.random() * 40, 0.038, 0.075, "triangle", when + 0.02);
+      this.mapleSwish(640, 220, 0.06, 0.18, when);
+      this.tonePop(680 + Math.random() * 40, 0.042, 0.14, "triangle", when + 0.02);
     }
   }
 
   /** 타격 확정 — slot: j | k | l */
   playHit(slot = "j", big = false) {
     if (!this.ensure()) return;
-    this.resume();
     const now = performance.now();
-    const gap = slot === "j" ? 32 : slot === "k" ? 48 : 44;
+    const gap = slot === "j" ? 28 : slot === "k" ? 42 : 38;
     if (now - this.lastHit < gap) return;
     this.lastHit = now;
 
     this.hitPitch = (this.hitPitch + 1) % 5;
-    const step = this.hitPitch * 18;
+    const step = this.hitPitch * 20;
     const when = this.t();
-    const vol = big ? 0.24 : slot === "k" ? 0.17 : slot === "l" ? 0.16 : 0.13;
+    const vol = big ? 0.42 : slot === "k" ? 0.32 : slot === "l" ? 0.3 : 0.28;
 
     if (slot === "j") {
-      this.thump(260 + step, vol, 0.055, when);
-      this.tonePop(1180 + step * 2, 0.04, vol * 0.65, "square", when + 0.012);
-      this.tonePop(640, 0.025, vol * 0.35, "sine", when + 0.008);
+      this.thump(260 + step, vol, 0.06, when);
+      this.tonePop(1180 + step * 2, 0.045, vol * 0.85, "square", when + 0.012);
+      this.tonePop(640, 0.03, vol * 0.5, "sine", when + 0.008);
     } else if (slot === "k") {
-      this.thump(200, vol * 1.05, 0.07, when);
-      this.tonePop(720, 0.035, vol * 0.5, "triangle", when + 0.02);
-      this.tonePop(960, 0.03, vol * 0.45, "square", when + 0.04);
-      this.tonePop(1280, 0.025, vol * 0.35, "sine", when + 0.055);
+      this.thump(200, vol * 1.05, 0.08, when);
+      this.tonePop(720, 0.04, vol * 0.65, "triangle", when + 0.02);
+      this.tonePop(960, 0.035, vol * 0.6, "square", when + 0.04);
+      this.tonePop(1280, 0.03, vol * 0.5, "sine", when + 0.055);
     } else {
-      this.thump(170, vol, 0.075, when);
-      this.sweep(900, 420, 0.1, vol * 0.45, when, "triangle");
-      this.tonePop(1520, 0.035, vol * 0.4, "sine", when + 0.03);
+      this.thump(170, vol, 0.085, when);
+      this.sweep(900, 420, 0.11, vol * 0.6, when, "triangle");
+      this.tonePop(1520, 0.04, vol * 0.55, "sine", when + 0.03);
     }
 
     if (big) {
-      this.tonePop(440, 0.08, vol * 0.55, "sine", when + 0.06);
-      this.mapleSwish(380, 120, 0.08, vol * 0.35, when + 0.02);
+      this.tonePop(440, 0.09, vol * 0.7, "sine", when + 0.06);
+      this.mapleSwish(380, 120, 0.09, vol * 0.5, when + 0.02);
     }
   }
 
   /** K / L 스킬 시전 */
   playSkill(kind = "primary") {
     if (!this.ensure()) return;
-    this.resume();
     const when = this.t();
 
     if (kind === "secondary") {
-      this.sweep(880, 320, 0.14, 0.13, when, "triangle");
-      this.tonePop(620, 0.05, 0.1, "square", when + 0.04);
-      this.tonePop(980, 0.04, 0.08, "sine", when + 0.07);
-      this.mapleSwish(560, 180, 0.06, 0.09, when + 0.02);
+      this.sweep(880, 320, 0.15, 0.22, when, "triangle");
+      this.tonePop(620, 0.055, 0.18, "square", when + 0.04);
+      this.tonePop(980, 0.045, 0.15, "sine", when + 0.07);
+      this.mapleSwish(560, 180, 0.065, 0.16, when + 0.02);
     } else {
-      this.sweep(320, 980, 0.16, 0.14, when, "sine");
-      this.tonePop(840, 0.045, 0.11, "triangle", when + 0.05);
-      this.tonePop(1120, 0.035, 0.09, "square", when + 0.08);
-      this.thump(120, 0.09, 0.07, when + 0.03);
+      this.sweep(320, 980, 0.17, 0.24, when, "sine");
+      this.tonePop(840, 0.05, 0.2, "triangle", when + 0.05);
+      this.tonePop(1120, 0.04, 0.16, "square", when + 0.08);
+      this.thump(120, 0.1, 0.12, when + 0.03);
     }
   }
 
   playHurt() {
     if (!this.ensure()) return;
-    this.resume();
     const now = performance.now();
     if (now - this.lastHurt < 120) return;
     this.lastHurt = now;
     const when = this.t();
-    this.thump(95, 0.18, 0.09, when);
-    this.sweep(380, 140, 0.14, 0.12, when, "sawtooth");
+    this.thump(95, 0.22, 0.1, when);
+    this.sweep(380, 140, 0.14, 0.16, when, "sawtooth");
   }
 
   playKill() {
     if (!this.ensure()) return;
-    this.resume();
     const when = this.t();
-    this.tonePop(988, 0.06, 0.11, "square", when);
-    this.tonePop(1318, 0.08, 0.1, "sine", when + 0.05);
-    this.tonePop(784, 0.1, 0.08, "triangle", when + 0.1);
+    this.tonePop(988, 0.07, 0.18, "square", when);
+    this.tonePop(1318, 0.09, 0.16, "sine", when + 0.05);
+    this.tonePop(784, 0.11, 0.14, "triangle", when + 0.1);
   }
 
   playClear() {
     if (!this.ensure()) return;
-    this.resume();
     const when = this.t();
-    this.sweep(440, 880, 0.22, 0.14, when, "sine");
-    this.tonePop(660, 0.1, 0.1, "triangle", when + 0.08);
-    this.tonePop(880, 0.12, 0.11, "square", when + 0.14);
-    this.tonePop(1175, 0.16, 0.1, "sine", when + 0.22);
+    this.sweep(440, 880, 0.22, 0.2, when, "sine");
+    this.tonePop(660, 0.11, 0.16, "triangle", when + 0.08);
+    this.tonePop(880, 0.13, 0.17, "square", when + 0.14);
+    this.tonePop(1175, 0.17, 0.15, "sine", when + 0.22);
   }
 
   mapleSwish(from, to, dur, vol, when = this.t()) {
@@ -158,7 +156,7 @@ class GameSfx {
     filter.type = "bandpass";
     filter.frequency.setValueAtTime(from, when);
     filter.frequency.exponentialRampToValueAtTime(Math.max(80, to), when + dur);
-    filter.Q.value = 1.4;
+    filter.Q.value = 1.6;
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(vol, when);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + dur);

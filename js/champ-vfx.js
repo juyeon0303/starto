@@ -75,59 +75,171 @@ export function drawFx(ctx, game) {
         const c = worldToScreen(f.x, f.y, lift);
         ctx.translate(c.x, c.y);
         ctx.rotate(f.angle);
+        ctx.globalAlpha = life * 0.9;
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = 5 + (1 - life) * 10;
+        ctx.shadowColor = f.color;
+        ctx.shadowBlur = 22;
+        ctx.beginPath();
+        ctx.arc(0, 0, f.r * 0.62, -f.span, f.span);
+        ctx.stroke();
+        ctx.globalAlpha = life * 0.35;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, f.r * 0.45, -f.span * 0.85, f.span * 0.85);
+        ctx.stroke();
+        break;
+      }
+      case "spinSlash": {
+        const c = worldToScreen(f.x, f.y, lift);
+        const spin = (1 - life) * Math.PI * 2.4;
+        ctx.translate(c.x, c.y);
+        ctx.rotate(spin);
         ctx.globalAlpha = life * 0.85;
         ctx.strokeStyle = f.color;
-        ctx.lineWidth = 4 + (1 - life) * 8;
+        ctx.lineWidth = 5 + (1 - life) * 6;
+        ctx.shadowColor = f.glow || f.color;
+        ctx.shadowBlur = 24;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(0, 0, f.r * (0.5 + i * 0.08), (Math.PI / 2) * i, (Math.PI / 2) * i + 1.2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = life * 0.25;
+        ctx.beginPath();
+        ctx.arc(0, 0, f.r * 0.35, 0, Math.PI * 2);
+        ctx.fillStyle = f.glow || f.color;
+        ctx.fill();
+        break;
+      }
+      case "ringBurst": {
+        const c = worldToScreen(f.x, f.y, lift);
+        const rad = f.r * (0.35 + (1 - life) * 0.65) * 0.55;
+        ctx.globalAlpha = life * 0.7;
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rad);
+        g.addColorStop(0, f.core || "#fff");
+        g.addColorStop(0.35, f.color);
+        g.addColorStop(1, "transparent");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = life * 0.85;
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = 3 + (1 - life) * 4;
         ctx.shadowColor = f.color;
         ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.arc(0, 0, f.r * 0.62, -f.span, f.span);
+        ctx.arc(c.x, c.y, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      }
+      case "starBurst": {
+        const c = worldToScreen(f.x, f.y, lift);
+        ctx.translate(c.x, c.y);
+        ctx.rotate(f.angle || 0);
+        ctx.globalAlpha = life * 0.75;
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = f.color;
+        ctx.shadowBlur = 16;
+        const rays = f.rays || 8;
+        const len = f.r * (0.4 + (1 - life) * 0.5) * 0.55;
+        for (let i = 0; i < rays; i++) {
+          const a = (Math.PI * 2 * i) / rays;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+          ctx.stroke();
+        }
+        break;
+      }
+      case "magicCone": {
+        const c = worldToScreen(f.x, f.y, lift);
+        ctx.translate(c.x, c.y);
+        ctx.rotate(f.angle);
+        ctx.globalAlpha = life * 0.55;
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, f.r * 0.55);
+        g.addColorStop(0, f.core || "#fff");
+        g.addColorStop(0.4, f.color);
+        g.addColorStop(1, "transparent");
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, f.r * 0.55, -f.span, f.span);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = life * 0.9;
+        ctx.strokeStyle = f.glow || f.color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 20;
         ctx.stroke();
         break;
       }
       case "shockwave": {
         const c = worldToScreen(f.x, f.y, 2);
-        ctx.globalAlpha = life * 0.6;
+        const rad = f.r * (0.5 + (1 - life) * 0.55) * 0.55;
+        ctx.globalAlpha = life * 0.75;
         ctx.strokeStyle = f.color;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 4 + (1 - life) * 5;
         ctx.shadowColor = f.color;
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = 20;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, f.r * (1.1 - life * 0.3) * 0.55, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = life * 0.35;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, rad * 0.72, 0, Math.PI * 2);
         ctx.stroke();
         break;
       }
       case "nova": {
         const c = worldToScreen(f.x, f.y, 2);
-        ctx.globalAlpha = life * 0.5;
-        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, f.r * (1.2 - life * 0.5) * 0.5);
-        g.addColorStop(0, f.color);
-        g.addColorStop(0.55, "transparent");
+        const rad = f.r * (0.55 + (1 - life) * 0.75) * 0.55;
+        ctx.globalAlpha = life * 0.65;
+        const g = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, rad);
+        g.addColorStop(0, f.core || "#fff");
+        g.addColorStop(0.25, f.color);
+        g.addColorStop(0.6, "transparent");
         g.addColorStop(1, "transparent");
         ctx.fillStyle = g;
         ctx.beginPath();
-        ctx.arc(c.x, c.y, f.r * (1.3 - life * 0.4) * 0.55, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, rad, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = life * 0.5;
+        ctx.strokeStyle = f.color;
+        ctx.lineWidth = 3;
+        ctx.shadowBlur = 22;
+        ctx.stroke();
         break;
       }
       case "lightning": {
         ctx.globalAlpha = life;
         ctx.strokeStyle = f.color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 3.5;
         ctx.shadowColor = f.color;
-        ctx.shadowBlur = 16;
+        ctx.shadowBlur = 22;
         const a = worldToScreen(f.x1, f.y1, lift);
         const b = worldToScreen(f.x2, f.y2, lift);
         const mx = (a.x + b.x) / 2 + (f.jx || 0);
         const my = (a.y + b.y) / 2 + (f.jy || 0);
+        const jx2 = (a.x + mx) / 2 + (f.jx2 || 0);
+        const jy2 = (a.y + my) / 2 + (f.jy2 || 0);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
+        ctx.lineTo(jx2, jy2);
         ctx.lineTo(mx, my);
         ctx.lineTo(b.x, b.y);
         ctx.stroke();
-        ctx.lineWidth = 6;
-        ctx.globalAlpha = life * 0.25;
+        ctx.lineWidth = 8;
+        ctx.globalAlpha = life * 0.3;
         ctx.stroke();
+        ctx.globalAlpha = life * 0.9;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 4 + (1 - life) * 6, 0, Math.PI * 2);
+        ctx.fill();
         break;
       }
       case "afterimage": {
@@ -178,20 +290,31 @@ export function playSpaceVfx(game, champ, p, angle) {
   switch (champ.spaceType) {
     case "slash":
       addFx(game, {
-        kind: "shockwave",
+        kind: "spinSlash",
         x: p.x,
         y: p.y,
         r: 64,
         color: t.slash,
-        maxT: 0.22,
+        glow: t.glow,
+        maxT: 0.28,
       });
       addFx(game, {
-        kind: "shockwave",
+        kind: "ringBurst",
         x: p.x,
         y: p.y,
-        r: 44,
-        color: t.glow,
-        maxT: 0.16,
+        r: 72,
+        color: t.slash,
+        core: "#fff8e1",
+        maxT: 0.24,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x,
+        y: p.y,
+        r: 58,
+        color: t.accent,
+        rays: 6,
+        maxT: 0.2,
       });
       break;
     case "bash":
@@ -199,9 +322,28 @@ export function playSpaceVfx(game, champ, p, angle) {
         kind: "shockwave",
         x: p.x + Math.cos(angle) * 24,
         y: p.y + Math.sin(angle) * 24,
-        r: 58,
+        r: 72,
         color: t.glow,
-        maxT: 0.35,
+        maxT: 0.4,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x,
+        y: p.y,
+        r: 68,
+        color: t.color,
+        core: "#eceff1",
+        maxT: 0.32,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x + Math.cos(angle) * 20,
+        y: p.y + Math.sin(angle) * 20,
+        angle,
+        r: 48,
+        color: t.accent,
+        rays: 5,
+        maxT: 0.25,
       });
       break;
     case "stab":
@@ -211,7 +353,73 @@ export function playSpaceVfx(game, champ, p, angle) {
         y: p.y - Math.sin(angle) * 20,
         angle,
         champId: champ.id,
-        maxT: 0.28,
+        maxT: 0.32,
+      });
+      addFx(game, {
+        kind: "magicCone",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 88,
+        span: 0.35,
+        color: t.glow,
+        core: t.accent,
+        maxT: 0.22,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x + Math.cos(angle) * 36,
+        y: p.y + Math.sin(angle) * 36,
+        angle,
+        r: 40,
+        color: t.color,
+        rays: 4,
+        maxT: 0.18,
+      });
+      break;
+    case "bolt":
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x,
+        y: p.y,
+        r: 42,
+        color: t.glow,
+        core: "#fff",
+        maxT: 0.2,
+      });
+      addFx(game, {
+        kind: "magicCone",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 56,
+        span: 0.25,
+        color: t.color,
+        glow: t.accent,
+        maxT: 0.18,
+      });
+      break;
+    case "shot":
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 52,
+        color: t.accent,
+        rays: 5,
+        maxT: 0.16,
+      });
+      addFx(game, {
+        kind: "magicCone",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 64,
+        span: 0.18,
+        color: t.glow,
+        core: "#e8f5e9",
+        maxT: 0.14,
       });
       break;
     case "zap": {
@@ -223,9 +431,28 @@ export function playSpaceVfx(game, champ, p, angle) {
           y1: p.y,
           x2: target.x,
           y2: target.y,
-          jx: (Math.random() - 0.5) * 18,
-          jy: (Math.random() - 0.5) * 18,
+          jx: (Math.random() - 0.5) * 24,
+          jy: (Math.random() - 0.5) * 24,
+          jx2: (Math.random() - 0.5) * 16,
+          jy2: (Math.random() - 0.5) * 16,
           color: t.glow,
+          maxT: 0.28,
+        });
+        addFx(game, {
+          kind: "ringBurst",
+          x: target.x,
+          y: target.y,
+          r: 48,
+          color: t.accent,
+          core: "#fff",
+          maxT: 0.22,
+        });
+        addFx(game, {
+          kind: "shockwave",
+          x: target.x,
+          y: target.y,
+          r: 40,
+          color: t.color,
           maxT: 0.2,
         });
       }
@@ -239,20 +466,43 @@ export function playSpaceVfx(game, champ, p, angle) {
 export function playPrimaryVfx(game, champ, p, extra = {}) {
   const t = themeFor(champ);
   switch (champ.skillType) {
-    case "dash":
+    case "dash": {
+      const ang = Math.atan2((extra.ny ?? p.y) - p.y, (extra.nx ?? p.x) - p.x);
       addFx(game, {
         kind: "slashArc",
         x: p.x,
         y: p.y,
-        angle: Math.atan2((extra.ny ?? p.y) - p.y, (extra.nx ?? p.x) - p.x),
-        r: 70,
-        span: 0.55,
+        angle: ang,
+        r: 88,
+        span: 0.65,
         color: t.slash,
-        maxT: 0.25,
+        maxT: 0.3,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: extra.nx ?? p.x,
+        y: extra.ny ?? p.y,
+        r: 80,
+        color: t.accent,
+        core: "#fff3e0",
+        maxT: 0.28,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: extra.nx ?? p.x,
+        y: extra.ny ?? p.y,
+        angle: ang,
+        r: 64,
+        color: t.glow,
+        rays: 7,
+        maxT: 0.22,
       });
       break;
+    }
     case "nova":
-      addFx(game, { kind: "nova", x: p.x, y: p.y, r: 130, color: t.glow, maxT: 0.45 });
+      addFx(game, { kind: "nova", x: p.x, y: p.y, r: 150, color: t.glow, core: "#fff", maxT: 0.52 });
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 130, color: t.color, core: t.accent, maxT: 0.45 });
+      addFx(game, { kind: "starBurst", x: p.x, y: p.y, r: 110, color: t.accent, rays: 10, maxT: 0.38 });
       break;
     case "blink":
       addFx(game, {
@@ -261,13 +511,50 @@ export function playPrimaryVfx(game, champ, p, extra = {}) {
         y: p.y,
         angle: p.angle,
         champId: champ.id,
-        maxT: 0.35,
+        maxT: 0.4,
+      });
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 56, color: t.glow, core: t.accent, maxT: 0.32 });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x,
+        y: p.y,
+        r: 48,
+        color: t.color,
+        rays: 6,
+        maxT: 0.24,
       });
       break;
     case "slam":
-      addFx(game, { kind: "shockwave", x: p.x, y: p.y, r: 100, color: t.glow, maxT: 0.5 });
+      addFx(game, { kind: "shockwave", x: p.x, y: p.y, r: 120, color: t.glow, maxT: 0.55 });
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 105, color: t.color, core: "#eceff1", maxT: 0.48 });
+      addFx(game, { kind: "starBurst", x: p.x, y: p.y, r: 90, color: t.accent, rays: 8, maxT: 0.35 });
+      break;
+    case "pierce":
+      addFx(game, {
+        kind: "magicCone",
+        x: p.x,
+        y: p.y,
+        angle: p.angle,
+        r: 120,
+        span: 0.12,
+        color: t.accent,
+        glow: t.glow,
+        maxT: 0.35,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x + Math.cos(p.angle) * 40,
+        y: p.y + Math.sin(p.angle) * 40,
+        angle: p.angle,
+        r: 70,
+        color: t.glow,
+        rays: 5,
+        maxT: 0.28,
+      });
       break;
     case "chain":
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 64, color: t.glow, core: "#fff", maxT: 0.3 });
+      addFx(game, { kind: "shockwave", x: p.x, y: p.y, r: 72, color: t.accent, maxT: 0.35 });
       break;
     default:
       break;
@@ -283,16 +570,38 @@ export function playSecondaryVfx(game, champ, p, angle) {
         x: p.x,
         y: p.y,
         angle,
-        r: 92,
-        span: 1.05,
+        r: 108,
+        span: 1.15,
         color: t.slash,
+        maxT: 0.34,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x + Math.cos(angle) * 50,
+        y: p.y + Math.sin(angle) * 50,
+        r: 80,
+        color: t.accent,
+        core: "#fff8e1",
         maxT: 0.28,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 72,
+        color: t.glow,
+        rays: 6,
+        maxT: 0.24,
       });
       break;
     case "smoke":
-      addFx(game, { kind: "nova", x: p.x, y: p.y, r: 72, color: "#78909c", maxT: 0.55 });
+      addFx(game, { kind: "nova", x: p.x, y: p.y, r: 88, color: "#78909c", core: "#cfd8dc", maxT: 0.6 });
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 76, color: t.glow, core: "#455a64", maxT: 0.5 });
       break;
     case "taunt":
+      addFx(game, { kind: "shockwave", x: p.x, y: p.y, r: 95, color: t.glow, maxT: 0.45 });
+      addFx(game, { kind: "ringBurst", x: p.x, y: p.y, r: 85, color: t.color, core: "#eceff1", maxT: 0.4 });
       game.enemies.forEach((e) => {
         const d = Math.hypot(e.x - p.x, e.y - p.y);
         if (d < 200 && d > 1) {
@@ -303,7 +612,7 @@ export function playSecondaryVfx(game, champ, p, angle) {
             x2: p.x,
             y2: p.y,
             color: t.glow,
-            maxT: 0.35,
+            maxT: 0.4,
           });
         }
       });
@@ -313,9 +622,18 @@ export function playSecondaryVfx(game, champ, p, angle) {
         kind: "trap",
         x: p.x,
         y: p.y,
-        r: 70,
+        r: 78,
         color: t.accent,
-        maxT: 0.6,
+        maxT: 0.65,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x,
+        y: p.y,
+        r: 70,
+        color: t.glow,
+        core: "#33691e",
+        maxT: 0.5,
       });
       break;
     case "field":
@@ -323,9 +641,48 @@ export function playSecondaryVfx(game, champ, p, angle) {
         kind: "shockwave",
         x: p.x + Math.cos(angle) * 90,
         y: p.y + Math.sin(angle) * 90,
-        r: 72,
+        r: 88,
         color: t.glow,
+        maxT: 0.6,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x + Math.cos(angle) * 90,
+        y: p.y + Math.sin(angle) * 90,
+        r: 80,
+        color: t.accent,
+        core: "#fff",
         maxT: 0.55,
+      });
+      addFx(game, {
+        kind: "starBurst",
+        x: p.x + Math.cos(angle) * 90,
+        y: p.y + Math.sin(angle) * 90,
+        r: 64,
+        color: t.color,
+        rays: 8,
+        maxT: 0.4,
+      });
+      break;
+    case "bolt":
+      addFx(game, {
+        kind: "magicCone",
+        x: p.x,
+        y: p.y,
+        angle,
+        r: 100,
+        span: 0.2,
+        color: t.glow,
+        core: "#fff",
+        maxT: 0.32,
+      });
+      addFx(game, {
+        kind: "ringBurst",
+        x: p.x + Math.cos(angle) * 60,
+        y: p.y + Math.sin(angle) * 60,
+        r: 72,
+        color: t.accent,
+        maxT: 0.28,
       });
       break;
     default:

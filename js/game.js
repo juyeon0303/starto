@@ -234,6 +234,7 @@ export class Game {
     this.setRunControlsVisible(true);
     this.hideOverlay();
     this.sfx.ensure();
+    this.sfx.resume();
     this.audio.play();
     this.prepareWave();
   }
@@ -1283,10 +1284,21 @@ export class Game {
             y1: ly,
             x2: cur.x,
             y2: cur.y,
-            jx: (Math.random() - 0.5) * 22,
-            jy: (Math.random() - 0.5) * 22,
+            jx: (Math.random() - 0.5) * 28,
+            jy: (Math.random() - 0.5) * 28,
+            jx2: (Math.random() - 0.5) * 18,
+            jy2: (Math.random() - 0.5) * 18,
             color: th.glow,
-            maxT: 0.3,
+            maxT: 0.35,
+          });
+          addFx(this, {
+            kind: "ringBurst",
+            x: cur.x,
+            y: cur.y,
+            r: 36,
+            color: th.accent,
+            core: "#fff",
+            maxT: 0.2,
           });
           this.damageEnemy(cur, dmg * (1 - i * 0.1), true);
           this.particles.push({ x: cur.x, y: cur.y, t: 0.28, color: th.glow });

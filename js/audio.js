@@ -4,7 +4,7 @@ const BGM_CANDIDATES = [
   "assets/audio/swordland.mp3",
   "assets/audio/sao-battle.mp3",
 ];
-const BGM_VOLUME = 0.5;
+const BGM_VOLUME = 0.22;
 
 export function createGameAudio() {
   return new GameAudio();
