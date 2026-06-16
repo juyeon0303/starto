@@ -534,6 +534,8 @@ export class Game {
     clearTransientVfx(this);
     this.invuln = 0;
     this.smokeTimer = 0;
+    this.paused = false;
+    document.body.classList.remove("game-paused");
     this.setCombatUiVisible(false);
     this.pendingComposition = getWaveComposition(this.wave);
     this.event = pickRandom(WAVE_EVENTS, 1)[0];
@@ -631,6 +633,9 @@ export class Game {
   }
 
   beginCombat() {
+    this.hideOverlay();
+    this.paused = false;
+    document.body.classList.remove("game-paused");
     this.state = "combat";
     clearTransientVfx(this);
     this.invuln = 0;
@@ -1815,7 +1820,9 @@ export class Game {
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = "source-over";
     ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
     ctx.setLineDash([]);
+    ctx.filter = "none";
   }
 
   draw() {

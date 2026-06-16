@@ -116,21 +116,34 @@ export function clearTransientVfx(game) {
   game.sparks = [];
   game.trails = [];
   game.flash = 0;
+  game.shake = 0;
+}
+
+export function resetDrawState(ctx) {
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+  ctx.setLineDash([]);
+  ctx.filter = "none";
+}
+
+function shouldDrawPlayer(game) {
+  return !!game.player && (game.state === "combat" || game.state === "scout");
 }
 
 function drawPlayerSprite(ctx, game) {
   const p = game.player;
-  if (!p || game.state !== "combat") return;
+  if (!shouldDrawPlayer(game)) return;
   const lift = entityLift(p.radius);
   const body = worldToScreen(p.x, p.y, lift);
+  resetDrawState(ctx);
   ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-  ctx.shadowBlur = 0;
-  ctx.translate(body.x, body.y);
+  ctx.translate(Math.round(body.x), Math.round(body.y));
   ctx.scale(1.14, 1.14);
   drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
   ctx.restore();
+  resetDrawState(ctx);
 }
 
 function drawPlayerHpBar(ctx, game) {
@@ -303,7 +316,7 @@ export function renderFrame(game, ctx) {
     }, 0.01);
   });
 
-  if (game.player && game.state === "combat") {
+  if (shouldDrawPlayer(game)) {
     const p = game.player;
     const lift = entityLift(p.radius);
     push(p.x, p.y, lift, () => drawGroundShadow(ctx, p.x, p.y, p.radius));
@@ -340,8 +353,6 @@ export function renderFrame(game, ctx) {
     }
   });
   drawFx(ctx, game);
-  drawPlayerSprite(ctx, game);
-  drawPlayerHpBar(ctx, game);
 
   game.floatTexts.forEach((f) => {
     const p = worldToScreen(f.x, f.y, entityLift(16) + 20);
@@ -366,6 +377,26 @@ export function renderFrame(game, ctx) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
+
+  drawPlayerOverlay(ctx, game);
+}
+
+function drawPlayerOverlay(ctx, game) {
+  if (!shouldDrawPlayer(game)) return;
+
+  const shake = game.shake || 0;
+  const sx = shake ? Math.sin(game.bgTime * 52) * shake * 1.15 : 0;
+  const sy = shake ? Math.cos(game.bgTime * 47) * shake * 1.15 : 0;
+
+  resetDrawState(ctx);
+  ctx.save();
+  ctx.translate(sx, sy);
+  drawPlayerSprite(ctx, game);
+  if (game.state === "combat") {
+    drawPlayerHpBar(ctx, game);
+  }
+  ctx.restore();
+  resetDrawState(ctx);
 }
 
 function drawBasicRangeIndicator(ctx, game) {

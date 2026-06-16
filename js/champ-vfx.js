@@ -14,6 +14,14 @@ import {
   drawWarMace,
 } from "./weapon-art.js";
 
+function resetFxDrawState(ctx) {
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = "transparent";
+  ctx.setLineDash([]);
+}
+
 export const CHAMP_THEMES = {
   blade: {
     color: "#ff7043",
@@ -72,12 +80,14 @@ export function updateFx(game, dt) {
   if (!game.fx) return;
   game.fx = game.fx.filter((f) => {
     f.t -= dt;
+    if (!Number.isFinite(f.t)) return false;
     return f.t > 0;
   });
 }
 
 export function drawFx(ctx, game) {
   if (!game.fx) return;
+  resetFxDrawState(ctx);
   const time = game.bgTime || 0;
   for (const f of game.fx) {
     const life = f.t / (f.maxT || 0.4);
@@ -255,14 +265,9 @@ export function drawFx(ctx, game) {
         ctx.fill();
         break;
       }
-      case "afterimage": {
-        const c = worldToScreen(f.x, f.y, entityLift(16));
-        ctx.translate(c.x, c.y);
-        ctx.rotate(f.angle);
-        ctx.globalAlpha = life * 0.45;
-        drawChampBody(ctx, f.champId, time, true);
+      case "afterimage":
+        // 잔상 실루엣은 라이브 플레이어 위에 겹쳐 '투명 유령'처럼 보임 — 링만 표시
         break;
-      }
       case "pull": {
         ctx.globalAlpha = life * 0.35;
         ctx.strokeStyle = f.color;
@@ -715,6 +720,7 @@ export function projKindFor(champ, slot = "space") {
 }
 
 function drawChampTorso(ctx, color, glow) {
+  ctx.globalAlpha = 1;
   ctx.fillStyle = shadeHex(color, -40);
   ctx.beginPath();
   ctx.moveTo(-9, 10);
@@ -746,6 +752,7 @@ function drawChampHead(ctx, champId, color, glow) {
   head.addColorStop(0, glow);
   head.addColorStop(0.55, color);
   head.addColorStop(1, shadeHex(color, -35));
+  ctx.globalAlpha = 1;
   ctx.fillStyle = head;
   ctx.beginPath();
   ctx.arc(0, -10, 8, 0, Math.PI * 2);
@@ -864,14 +871,12 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   ctx.globalAlpha = 1;
 
   ctx.save();
-  ctx.shadowColor = t.glow;
-  ctx.shadowBlur = 14;
   ctx.rotate(p.angle);
   drawChampTorso(ctx, t.color, t.glow);
   drawChampWeapons(ctx, id, time, t.color, t.glow);
-  ctx.shadowBlur = 0;
   ctx.restore();
 
+  ctx.globalAlpha = 1;
   drawChampHead(ctx, id, t.color, t.glow);
 
   ctx.globalAlpha = 1;
