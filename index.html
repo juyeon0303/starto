@@ -29,10 +29,6 @@
         <span class="label">BRIEFING</span>
         <span class="hud-value sm muted" id="wave-info">—</span>
       </div>
-      <div id="run-controls" class="run-controls hidden">
-        <button type="button" id="btn-pause" class="run-btn">⏸ 일시정지</button>
-        <button type="button" id="btn-home" class="run-btn run-btn-ghost">홈</button>
-      </div>
     </div>
 
     <div id="augment-strip" class="augment-strip hidden">
@@ -45,6 +41,10 @@
       <div class="canvas-shell">
         <div class="canvas-frame"></div>
         <canvas id="game" width="960" height="560"></canvas>
+        <div id="run-controls" class="run-controls hidden" aria-label="게임 컨트롤">
+          <button type="button" id="btn-pause" class="run-btn run-btn-pause">⏸ 일시정지</button>
+          <button type="button" id="btn-home" class="run-btn run-btn-home">⌂ 홈</button>
+        </div>
         <div class="canvas-vignette"></div>
       </div>
 
