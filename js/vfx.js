@@ -176,6 +176,7 @@ export function renderFrame(game, ctx) {
 
   drawArenaBg(ctx, game.bgTime, game.event?.id);
   drawIsoPlatform(ctx, game.bgTime);
+  darkenOutsideArena(ctx);
   drawAmbientParticlesIso(ctx, game);
   if (game.state === "combat" && game.player) {
     drawBasicRangeIndicator(ctx, game);
@@ -222,7 +223,7 @@ export function renderFrame(game, ctx) {
   );
 
   game.enemyProjectiles.forEach((pr) =>
-    push(pr.x, pr.y, 10, () => drawProjectileIso(ctx, pr, false))
+    push(pr.x, pr.y, 14, () => drawProjectileIso(ctx, pr, false), 0.5)
   );
 
   game.enemies.forEach((e) => {
@@ -442,39 +443,54 @@ function drawWorldArcZone(ctx, wx, wy, angle, radius, span, fill = false) {
 
 function drawArenaBg(ctx, time, eventId) {
   const sky = ctx.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, eventId === "surge" ? "#1a1030" : "#0d1a2e");
-  sky.addColorStop(0.35, eventId === "rage" ? "#241018" : "#122038");
-  sky.addColorStop(0.72, "#0a1420");
+  sky.addColorStop(0, eventId === "surge" ? "#121028" : "#0a1420");
+  sky.addColorStop(0.5, eventId === "rage" ? "#181018" : "#0c1522");
   sky.addColorStop(1, "#050810");
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.globalAlpha = 0.35;
-  const sun = ctx.createRadialGradient(W * 0.72, H * 0.08, 0, W * 0.72, H * 0.08, 220);
-  sun.addColorStop(0, eventId === "surge" ? "#c084fc" : "#7dd3fc");
-  sun.addColorStop(0.4, "rgba(125, 211, 252, 0.08)");
-  sun.addColorStop(1, "transparent");
-  ctx.fillStyle = sun;
+  const cx = W * 0.5;
+  const cy = H * 0.46;
+  ctx.globalAlpha = 0.16;
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.55);
+  glow.addColorStop(0, eventId === "surge" ? "rgba(192, 132, 252, 0.12)" : "rgba(56, 189, 248, 0.1)");
+  glow.addColorStop(0.55, "rgba(8, 16, 28, 0.04)");
+  glow.addColorStop(1, "transparent");
+  ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
-  ctx.globalAlpha = 0.55;
-  for (let i = 0; i < 40; i++) {
+  ctx.globalAlpha = 0.45;
+  for (let i = 0; i < 36; i++) {
     const sx = ((i * 137) % W) + Math.sin(time * 0.15 + i) * 2;
-    const sy = ((i * 89) % (H * 0.55)) + 12;
-    const tw = 0.35 + Math.sin(time * 1.2 + i * 0.7) * 0.35;
-    ctx.globalAlpha = tw * 0.7;
-    ctx.fillStyle = i % 3 === 0 ? "#e0f2fe" : "#fff";
+    const sy = ((i * 89) % (H - PAD * 2)) + PAD;
+    const tw = 0.3 + Math.sin(time * 1.2 + i * 0.7) * 0.28;
+    ctx.globalAlpha = tw * 0.55;
+    ctx.fillStyle = i % 3 === 0 ? "#bae6fd" : "#e2e8f0";
     ctx.beginPath();
-    ctx.arc(sx, sy, i % 5 === 0 ? 1.4 : 0.9, 0, Math.PI * 2);
+    ctx.arc(sx, sy, i % 5 === 0 ? 1.2 : 0.8, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  ctx.globalAlpha = 0.08;
+  ctx.globalAlpha = 0.05;
   ctx.fillStyle = eventId === "rage" ? "#ff3366" : "#00d4ff";
   ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
   ctx.globalAlpha = 1;
 
   drawArenaPillarsIso(ctx, time);
+}
+
+/** 아레나 밖(캔버스 모서리) 밝기 편차 제거 */
+function darkenOutsideArena(ctx) {
+  const corners = arenaCornersWorld().map(([x, y]) => worldToScreen(x, y, 0));
+  ctx.save();
+  ctx.fillStyle = "rgba(4, 7, 14, 0.88)";
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.fill("evenodd");
+  ctx.restore();
 }
 
 function drawArenaPillarsIso(ctx, time) {
@@ -711,9 +727,9 @@ function drawZoneIso(ctx, z, time) {
 }
 
 function drawProjectileIso(ctx, pr, friendly) {
-  const lift = friendly ? 14 : 10;
+  const lift = friendly ? 14 : 12;
   const pos = worldToScreen(pr.x, pr.y, lift);
-  drawGroundShadow(ctx, pr.x, pr.y, pr.radius * 0.55);
+  drawGroundShadow(ctx, pr.x, pr.y, (pr.radius || 6) * 0.65);
   if (friendly) {
     ctx.save();
     ctx.translate(pos.x, pos.y);
@@ -721,19 +737,62 @@ function drawProjectileIso(ctx, pr, friendly) {
     ctx.restore();
     return;
   }
+
   const ang = Math.atan2(pr.vy, pr.vx);
-  const color = "#ffb74d";
+  const color = pr.color || "#ffb300";
+  const glow = pr.glow || "#ff5722";
+  const r = pr.radius || 11;
+  const speed = Math.hypot(pr.vx, pr.vy) || 1;
+  const tail = Math.min(28, 12 + speed * 0.04);
+
   ctx.save();
   ctx.translate(pos.x, pos.y);
   ctx.rotate(ang);
-  ctx.fillStyle = color;
+
+  ctx.globalAlpha = 0.45;
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 5;
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 18;
   ctx.beginPath();
-  ctx.moveTo(8, 0);
-  ctx.lineTo(-6, 4);
-  ctx.lineTo(-4, 0);
-  ctx.lineTo(-6, -4);
+  ctx.moveTo(-tail, 0);
+  ctx.lineTo(r * 0.4, 0);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.35;
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.ellipse(-tail * 0.45, 0, tail * 0.55, r * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 22;
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "#fff3e0";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(r + 4, 0);
+  ctx.lineTo(-r * 0.35, r * 0.55);
+  ctx.lineTo(-r * 0.15, 0);
+  ctx.lineTo(-r * 0.35, -r * 0.55);
   ctx.closePath();
   ctx.fill();
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.arc(r * 0.15, 0, r * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.7;
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, r + 3, 0, Math.PI * 2);
+  ctx.stroke();
+
   ctx.restore();
 }
 

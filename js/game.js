@@ -348,6 +348,13 @@ export class Game {
       if (!s) return;
       s.name.textContent = cfg.name;
       s.name.title = cfg.desc;
+      if (s.desc) {
+        s.desc.textContent = i === 0 ? "" : cfg.desc;
+        s.desc.title = cfg.desc;
+      }
+      if (s.range) {
+        s.range.textContent = i === 0 ? s.range.textContent || "사거리 —" : "";
+      }
       s.icon.style.background = `linear-gradient(145deg, ${cfg.accent}, ${cfg.glow})`;
       s.icon.style.boxShadow = `0 0 18px ${cfg.glow}66`;
       mountSilhouette(s.sil, champ.id, "rgba(255,255,255,0.92)");
@@ -1505,9 +1512,11 @@ export class Game {
         vx: Math.cos(ang) * 280,
         vy: Math.sin(ang) * 280,
         damage: e.damage * 0.85,
-        life: 2.2,
-        radius: 6,
-        color: "#ffcc80",
+        life: 2.4,
+        radius: 11,
+        color: "#ffb300",
+        glow: "#ff5722",
+        enemy: true,
       });
     }
     if (d < e.radius + p.radius + 2) this.hurtPlayer(e.damage * 0.6, "melee");
