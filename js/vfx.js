@@ -118,6 +118,43 @@ export function clearTransientVfx(game) {
   game.flash = 0;
 }
 
+function drawPlayerSprite(ctx, game) {
+  const p = game.player;
+  if (!p || game.state !== "combat") return;
+  const lift = entityLift(p.radius);
+  const body = worldToScreen(p.x, p.y, lift);
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.translate(body.x, body.y);
+  ctx.scale(1.14, 1.14);
+  drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
+  ctx.restore();
+}
+
+function drawPlayerHpBar(ctx, game) {
+  const p = game.player;
+  if (!p || game.state !== "combat") return;
+  const th = themeFor(game.champion);
+  const lift = entityLift(p.radius);
+  const hp = worldToScreen(p.x, p.y, lift + 42);
+  const pct = p.hp / p.maxHp;
+  if (p.hpTrail == null) p.hpTrail = pct;
+  p.hpTrail += (pct - p.hpTrail) * 0.22;
+  ctx.save();
+  ctx.globalAlpha = 1;
+  drawHpBar(ctx, hp.x, hp.y, 68, 9, pct, th.accent, {
+    glow: true,
+    autoColor: true,
+    showText: true,
+    hp: p.hp,
+    maxHp: p.maxHp,
+    trailPct: p.hpTrail,
+  });
+  ctx.restore();
+}
+
 export function updateVfx(game, dt) {
   game.bgTime += dt;
   game.shake *= 0.86;
@@ -151,6 +188,11 @@ export function updateVfx(game, dt) {
   });
 
   updateFx(game, dt);
+
+  game.particles = (game.particles || []).filter((fx) => {
+    fx.t -= dt;
+    return fx.t > 0;
+  });
 
   if (game.ambientParticles) {
     for (const p of game.ambientParticles) {
@@ -263,31 +305,8 @@ export function renderFrame(game, ctx) {
 
   if (game.player && game.state === "combat") {
     const p = game.player;
-    const th = themeFor(game.champion);
     const lift = entityLift(p.radius);
-    push(p.x, p.y, lift, () => {
-      drawGroundShadow(ctx, p.x, p.y, p.radius);
-      const body = worldToScreen(p.x, p.y, lift);
-      ctx.save();
-      ctx.translate(body.x, body.y);
-      ctx.scale(1.14, 1.14);
-      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-      ctx.restore();
-    });
-    push(p.x, p.y, lift + 40, () => {
-      const hp = worldToScreen(p.x, p.y, lift + 42);
-      const pct = p.hp / p.maxHp;
-      if (p.hpTrail == null) p.hpTrail = pct;
-      p.hpTrail += (pct - p.hpTrail) * 0.22;
-      drawHpBar(ctx, hp.x, hp.y, 68, 9, pct, th.accent, {
-        glow: true,
-        autoColor: true,
-        showText: true,
-        hp: p.hp,
-        maxHp: p.maxHp,
-        trailPct: p.hpTrail,
-      });
-    }, 0.02);
+    push(p.x, p.y, lift, () => drawGroundShadow(ctx, p.x, p.y, p.radius));
   }
 
   game.sparks.forEach((s) =>
@@ -321,6 +340,8 @@ export function renderFrame(game, ctx) {
     }
   });
   drawFx(ctx, game);
+  drawPlayerSprite(ctx, game);
+  drawPlayerHpBar(ctx, game);
 
   game.floatTexts.forEach((f) => {
     const p = worldToScreen(f.x, f.y, entityLift(16) + 20);

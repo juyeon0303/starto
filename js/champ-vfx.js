@@ -296,6 +296,9 @@ export function drawFx(ctx, game) {
     }
     ctx.restore();
   }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
 }
 
 export function playSpaceVfx(game, champ, p, angle) {
@@ -848,6 +851,8 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   const bob = Math.sin(time * 8) * 1.2;
 
   ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
   ctx.translate(p.x, p.y);
   ctx.translate(0, bob);
 
@@ -881,20 +886,19 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  ctx.restore();
 
   if (smoke > 0 && id === "rogue") {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.55, smoke * 0.5);
     ctx.fillStyle = "#455a64";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, smokeR, 0, Math.PI * 2);
+    ctx.arc(0, 0, smokeR, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = Math.min(0.35, smoke * 0.35);
     ctx.strokeStyle = t.glow;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, smokeR + 8, 0, Math.PI * 2);
+    ctx.arc(0, 0, smokeR + 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
   } else if (smoke > 0) {
@@ -902,10 +906,14 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
     ctx.globalAlpha = Math.min(0.45, smoke * 0.4);
     ctx.fillStyle = "#78909c";
     ctx.beginPath();
-    ctx.arc(p.x, p.y, smokeR, 0, Math.PI * 2);
+    ctx.arc(0, 0, smokeR, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  ctx.restore();
 }
 
 export function drawChampProjectile(ctx, pr) {

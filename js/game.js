@@ -60,6 +60,8 @@ const SKILL2_DMG = 2.4;
 const BASIC_DMG = 1.05;
 const MELEE_SLASH_RANGE = 64;
 const SLASH_AOE_DMG = 0.88;
+/** 픽셀 단위 관대 판정 — 링에 닿아 보이는데 빗나가는 체감 완화 */
+const MELEE_REACH_LEEWAY = 8;
 const STAB_RANGE = 92;
 const BASH_RADIUS = 58;
 const KITE_START = 195;
@@ -530,6 +532,8 @@ export class Game {
     this.wave += 1;
     this.state = "scout";
     clearTransientVfx(this);
+    this.invuln = 0;
+    this.smokeTimer = 0;
     this.setCombatUiVisible(false);
     this.pendingComposition = getWaveComposition(this.wave);
     this.event = pickRandom(WAVE_EVENTS, 1)[0];
@@ -629,6 +633,8 @@ export class Game {
   beginCombat() {
     this.state = "combat";
     clearTransientVfx(this);
+    this.invuln = 0;
+    this.smokeTimer = 0;
     this.enemies = [];
     this.projectiles = [];
     this.enemyProjectiles = [];
@@ -1044,6 +1050,21 @@ export class Game {
     return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
+  /** 플레이어·적 몸통 가장자리 간 거리 */
+  meleeEdgeDist(e) {
+    const p = this.player;
+    if (!p) return Infinity;
+    return Math.hypot(e.x - p.x, e.y - p.y) - p.radius - e.radius;
+  }
+
+  inMeleeReach(e, reach = this.basicRange()) {
+    return this.meleeEdgeDist(e) <= reach + MELEE_REACH_LEEWAY;
+  }
+
+  slashVisualRadius() {
+    return this.basicRange() + (this.player?.radius ?? 16);
+  }
+
   attackRange() {
     const type = this.champion?.spaceType;
     if (type === "bolt" || type === "shot") {
@@ -1060,7 +1081,7 @@ export class Game {
     const type = this.champion?.spaceType ?? "slash";
     switch (type) {
       case "slash":
-        return { kind: "circle", range: MELEE_SLASH_RANGE, fullSpin: true };
+        return { kind: "circle", range: this.slashVisualRadius(), fullSpin: true };
       case "stab":
         return { kind: "circle", range: STAB_RANGE };
       case "bash":
@@ -1084,7 +1105,7 @@ export class Game {
     const v = this.getBasicRangeVisual();
     const r = Math.round(v.range);
     const type = this.champion?.spaceType;
-    if (v.fullSpin) return `근접 360° · ${r}px`;
+    if (v.fullSpin) return `근접 360° · ${Math.round(this.basicRange())}px`;
     if (v.kind === "arc") return `근접 ${r}px`;
     if (v.extra && type === "zap") return `사거리 ${r} · 전격 ${Math.round(v.extra)}px`;
     if (v.extra) return `사거리 ${r} · 최대 ${Math.round(v.extra)}px`;
@@ -1145,16 +1166,16 @@ export class Game {
 
     switch (c.spaceType) {
       case "slash": {
-        const r = MELEE_SLASH_RANGE + p.radius * 0.15;
+        const reach = this.basicRange();
         let hit = 0;
         this.enemies.forEach((e) => {
-          const d = Math.hypot(e.x - p.x, e.y - p.y);
-          if (d > r + e.radius) return;
-          const falloff = d < r * 0.42 ? (this.champion?.id === "blade" ? 1.12 : 1.05) : 1;
+          if (!this.inMeleeReach(e, reach)) return;
+          const edge = this.meleeEdgeDist(e);
+          const falloff = edge < reach * 0.42 ? (c.id === "blade" ? 1.12 : 1.05) : 1;
           this.damageEnemy(e, dmg * SLASH_AOE_DMG * falloff, true);
           hit += 1;
         });
-        addRing(this, p.x, p.y, th.glow, r * 2.1);
+        addRing(this, p.x, p.y, th.glow, this.slashVisualRadius() * 2.05);
         if (hit > 0) addShake(this, Math.min(4, 2 + hit));
         break;
       }
@@ -1241,7 +1262,7 @@ export class Game {
         const ny = clamp(p.y + Math.sin(p.angle) * dist, PAD, H - PAD);
         addTrail(this, p.x, p.y, nx, ny, th.slash, 8);
         this.enemies.forEach((e) => {
-          if (distToSegment(e.x, e.y, p.x, p.y, nx, ny) < e.radius + 28) {
+          if (distToSegment(e.x, e.y, p.x, p.y, nx, ny) < e.radius + 32) {
             this.damageEnemy(e, dmg, true);
           }
         });
@@ -1349,11 +1370,13 @@ export class Game {
 
     switch (c.skill2Type) {
       case "arc": {
-        const arcRange = c.id === "blade" ? 98 : 90;
+        const arcReach = (c.id === "blade" ? 98 : 90) + MELEE_REACH_LEEWAY;
         this.enemies.forEach((e) => {
           const ea = Math.atan2(e.y - p.y, e.x - p.x);
-          let diff = Math.abs(normAngle(ea - a));
-          if (diff < 0.9 && Math.hypot(e.x - p.x, e.y - p.y) < arcRange) this.damageEnemy(e, dmg, true);
+          const diff = Math.abs(normAngle(ea - a));
+          if (diff < 0.92 && this.meleeEdgeDist(e) <= arcReach) {
+            this.damageEnemy(e, dmg, true);
+          }
         });
         this.burst(p.x + Math.cos(a) * 40, p.y + Math.sin(a) * 40, th.slash);
         playSecondaryVfx(this, c, p, a);
@@ -1740,11 +1763,6 @@ export class Game {
       updateEnemyFacing(e, p);
       this.updateEnemyAI(e, dt);
     }
-
-    this.particles = this.particles.filter((fx) => {
-      fx.t -= dt;
-      return fx.t > 0;
-    });
 
     if (!this.spawnQueue.length && this.enemies.length === 0 && this.spawnTimer > 1.5) {
       if (this.wave >= WAVE_COUNT) {
