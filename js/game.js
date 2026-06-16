@@ -58,7 +58,7 @@ const SKILL2_DMG = 2.4;
 /** J = 연타 평타. K/L만 쿨 있음. */
 const BASIC_DMG = 1.05;
 const MELEE_SLASH_RANGE = 64;
-const SLASH_AOE_DMG = 0.78;
+const SLASH_AOE_DMG = 0.88;
 const STAB_RANGE = 92;
 const BASH_RADIUS = 58;
 const KITE_START = 195;
@@ -1144,7 +1144,7 @@ export class Game {
         this.enemies.forEach((e) => {
           const d = Math.hypot(e.x - p.x, e.y - p.y);
           if (d > r + e.radius) return;
-          const falloff = d < r * 0.42 ? 1.05 : 1;
+          const falloff = d < r * 0.42 ? (this.champion?.id === "blade" ? 1.12 : 1.05) : 1;
           this.damageEnemy(e, dmg * SLASH_AOE_DMG * falloff, true);
           hit += 1;
         });
@@ -1155,16 +1155,19 @@ export class Game {
       case "bolt": {
         if (!near || nearDist > acquireR) break;
         p.angle = Math.atan2(near.y - p.y, near.x - p.x);
+        const boltSpd = c.id === "mage" ? 680 : 640;
+        const boltDmg = c.id === "mage" ? dmg * 1.08 : dmg;
+        const boltLife = c.id === "mage" ? 0.68 : 0.62;
         this.pushFriendlyProjectile(
           p.x,
           p.y,
           p.angle,
-          640,
+          boltSpd,
           this.basicProjectileOpts({
             slot: "space",
-            damage: dmg,
-            life: 0.62,
-            radius: 8,
+            damage: boltDmg,
+            life: boltLife,
+            radius: c.id === "mage" ? 9 : 8,
             color: th.glow,
           })
         );
@@ -1195,7 +1198,7 @@ export class Game {
             radius: 5,
             color: th.accent,
             homing: false,
-            pierce: true,
+            pierce: c.id !== "archer",
           })
         );
         break;
@@ -1226,7 +1229,8 @@ export class Game {
 
     switch (c.skillType) {
       case "dash": {
-        const dist = 145 * this.eventFog;
+        const dashBase = c.id === "blade" ? 162 : 145;
+        const dist = dashBase * this.eventFog;
         const nx = clamp(p.x + Math.cos(p.angle) * dist, PAD, W - PAD);
         const ny = clamp(p.y + Math.sin(p.angle) * dist, PAD, H - PAD);
         addTrail(this, p.x, p.y, nx, ny, th.slash, 8);
@@ -1242,13 +1246,16 @@ export class Game {
         playPrimaryVfx(this, c, p, { nx, ny });
         break;
       }
-      case "nova":
-        this.dealDamage(dmg, p.x, p.y, 132 * this.eventFog, 35);
+      case "nova": {
+        const novaR = c.id === "mage" ? 148 : 132;
+        const novaDmg = c.id === "mage" ? dmg * 1.1 : dmg;
+        this.dealDamage(novaDmg, p.x, p.y, novaR * this.eventFog, 35);
         spawnBurst(this, p.x, p.y, th.glow, true);
         addShake(this, 6);
         addFlash(this, th.color, 0.28);
         playPrimaryVfx(this, c, p);
         break;
+      }
       case "blink": {
         const t = this.nearestEnemy(360);
         if (t) {
@@ -1270,16 +1277,19 @@ export class Game {
         addShake(this, 8);
         playPrimaryVfx(this, c, p);
         break;
-      case "pierce":
-        this.pushFriendlyProjectile(p.x, p.y, p.angle, 580, {
+      case "pierce": {
+        const pierceSpd = c.id === "archer" ? 520 : 580;
+        const pierceMult = c.id === "archer" ? 0.9 : 1;
+        this.pushFriendlyProjectile(p.x, p.y, p.angle, pierceSpd, {
           slot: "primary",
-          damage: dmg,
+          damage: dmg * pierceMult,
           life: 1.2,
           radius: 7,
           color: th.accent,
           pierce: true,
         });
         break;
+      }
       case "chain": {
         let cur = this.nearestEnemy(9999);
         let lx = p.x,
@@ -1329,25 +1339,32 @@ export class Game {
     const a = p.angle;
 
     switch (c.skill2Type) {
-      case "arc":
+      case "arc": {
+        const arcRange = c.id === "blade" ? 98 : 90;
         this.enemies.forEach((e) => {
           const ea = Math.atan2(e.y - p.y, e.x - p.x);
           let diff = Math.abs(normAngle(ea - a));
-          if (diff < 0.9 && Math.hypot(e.x - p.x, e.y - p.y) < 90) this.damageEnemy(e, dmg, true);
+          if (diff < 0.9 && Math.hypot(e.x - p.x, e.y - p.y) < arcRange) this.damageEnemy(e, dmg, true);
         });
         this.burst(p.x + Math.cos(a) * 40, p.y + Math.sin(a) * 40, th.slash);
         playSecondaryVfx(this, c, p, a);
         addShake(this, 5);
         break;
-      case "bolt":
-        this.pushFriendlyProjectile(p.x, p.y, a, 620, {
+      }
+      case "bolt": {
+        const bolt2Spd = c.id === "mage" ? 660 : 620;
+        const bolt2Mult = c.id === "mage" ? 1.35 : 1.2;
+        this.pushFriendlyProjectile(p.x, p.y, a, bolt2Spd, {
           slot: "secondary",
-          damage: dmg * 1.2,
-          life: 1,
-          radius: 8,
+          damage: dmg * bolt2Mult,
+          life: c.id === "mage" ? 1.15 : 1,
+          radius: c.id === "mage" ? 9 : 8,
           color: th.glow,
+          pierce: c.id === "mage",
+          homing: false,
         });
         break;
+      }
       case "smoke":
         this.invuln = 0.75;
         this.smokeTimer = 0.85;

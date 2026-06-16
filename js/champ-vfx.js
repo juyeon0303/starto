@@ -698,6 +698,49 @@ export function projKindFor(champ, slot = "space") {
   return t.proj;
 }
 
+function drawChampCore(ctx, color, glow) {
+  ctx.fillStyle = shadeHex(color, -40);
+  ctx.beginPath();
+  ctx.moveTo(-9, 10);
+  ctx.lineTo(9, 10);
+  ctx.lineTo(7, -2);
+  ctx.lineTo(-7, -2);
+  ctx.closePath();
+  ctx.fill();
+
+  const head = ctx.createRadialGradient(0, -10, 0, 0, -10, 9);
+  head.addColorStop(0, glow);
+  head.addColorStop(0.55, color);
+  head.addColorStop(1, shadeHex(color, -35));
+  ctx.fillStyle = head;
+  ctx.beginPath();
+  ctx.arc(0, -10, 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#101820";
+  ctx.beginPath();
+  ctx.arc(-3, -11, 1.8, 0, Math.PI * 2);
+  ctx.arc(3, -11, 1.8, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function shadeHex(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.min(255, ((n >> 16) & 255) + amt));
+  const g = Math.max(0, Math.min(255, ((n >> 8) & 255) + amt));
+  const b = Math.max(0, Math.min(255, (n & 255) + amt));
+  return `rgb(${r},${g},${b})`;
+}
+
+function weaponHighlight(ctx, width = 1.2) {
+  ctx.strokeStyle = "rgba(255,255,255,0.9)";
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
 function drawChampBody(ctx, champId, time, ghost = false) {
   const t = CHAMP_THEMES[champId] || CHAMP_THEMES.blade;
   const color = t.color;
@@ -706,234 +749,202 @@ function drawChampBody(ctx, champId, time, ghost = false) {
 
   if (!ghost) {
     ctx.shadowColor = glow;
-    ctx.shadowBlur = 24;
+    ctx.shadowBlur = 14;
   }
 
   ctx.translate(0, bob);
 
   if (!ghost) {
-    ctx.globalAlpha = 0.35 + Math.sin(time * 3) * 0.08;
-    ctx.strokeStyle = glow;
-    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = "#000";
     ctx.beginPath();
-    ctx.ellipse(0, 10, 20, 7, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 0.25;
-    ctx.strokeStyle = "#7dd3fc";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, 22 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.ellipse(0, 12, 16, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
   }
 
-  const bodyGrad = ctx.createRadialGradient(0, -4, 0, 0, 0, 20);
-  bodyGrad.addColorStop(0, glow);
-  bodyGrad.addColorStop(0.45, color);
-  bodyGrad.addColorStop(1, "#0a0e14");
-
-  ctx.fillStyle = "#0a0e14";
-  ctx.beginPath();
-  ctx.arc(0, 0, 18, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 14, 16, 0, 0, Math.PI * 2);
-  ctx.fill();
+  drawChampCore(ctx, color, glow);
+  ctx.shadowBlur = 0;
 
   switch (champId) {
     case "blade":
-      ctx.fillStyle = color;
+      ctx.fillStyle = "#5d4037";
+      ctx.fillRect(-5, 2, 10, 12);
+      ctx.fillStyle = "#eceff1";
       ctx.beginPath();
-      ctx.moveTo(24, 0);
-      ctx.lineTo(-4, 14);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(-4, -14);
+      ctx.moveTo(8, -2);
+      ctx.lineTo(42, 0);
+      ctx.lineTo(8, 2);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1;
-      ctx.stroke();
+      weaponHighlight(ctx);
       ctx.fillStyle = glow;
-      ctx.fillRect(6, -16, 8, 10);
-      ctx.strokeStyle = glow;
+      ctx.fillRect(6, -5, 4, 10);
+      ctx.strokeStyle = color;
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.moveTo(10, -18);
-      ctx.lineTo(20, -8);
-      ctx.lineTo(10, 2);
-      ctx.stroke();
-      ctx.fillStyle = "#5d4037";
-      ctx.fillRect(-8, 8, 16, 8);
+      ctx.moveTo(8, -14);
+      ctx.lineTo(36, -2);
+      ctx.lineTo(8, 10);
+      ctx.closePath();
+      ctx.fill();
+      weaponHighlight(ctx, 1.5);
       break;
     case "mage":
-      ctx.fillStyle = color;
+      ctx.fillStyle = shadeHex(color, -25);
       ctx.beginPath();
-      ctx.moveTo(0, -18);
-      ctx.lineTo(12, 10);
-      ctx.lineTo(-12, 10);
+      ctx.moveTo(-11, 2);
+      ctx.lineTo(11, 2);
+      ctx.lineTo(0, -6);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = "#6d4c41";
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(-14, 8);
+      ctx.lineTo(-14, -28);
+      ctx.stroke();
+      weaponHighlight(ctx, 1.5);
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.moveTo(0, -20);
-      ctx.lineTo(4, -10);
-      ctx.lineTo(-4, -10);
-      ctx.closePath();
+      ctx.arc(-14, -28, 6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
       ctx.fillStyle = "#fff";
-      ctx.globalAlpha = 0.9;
+      ctx.globalAlpha = 0.92;
       ctx.beginPath();
-      ctx.arc(16, -2, 5, 0, Math.PI * 2);
+      ctx.arc(18, -4, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.strokeStyle = glow;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(16, -2);
-      ctx.lineTo(26, -12);
+      ctx.moveTo(18, -4);
+      ctx.lineTo(30, -16);
       ctx.stroke();
-      ctx.fillStyle = "rgba(179, 136, 255, 0.35)";
-      ctx.beginPath();
-      ctx.moveTo(-14, 4);
-      ctx.lineTo(-22, 18);
-      ctx.lineTo(-6, 12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(14, 4);
-      ctx.lineTo(22, 18);
-      ctx.lineTo(6, 12);
-      ctx.closePath();
-      ctx.fill();
       break;
     case "rogue":
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(0, -16);
-      ctx.lineTo(10, 0);
-      ctx.lineTo(0, 14);
-      ctx.lineTo(-10, 0);
-      ctx.closePath();
-      ctx.fill();
       ctx.fillStyle = "#263238";
       ctx.beginPath();
-      ctx.arc(0, -8, 9, Math.PI, 0);
+      ctx.moveTo(-10, -14);
+      ctx.lineTo(10, -14);
+      ctx.lineTo(12, -6);
+      ctx.lineTo(-12, -6);
+      ctx.closePath();
       ctx.fill();
+      ctx.fillStyle = "#eceff1";
+      ctx.beginPath();
+      ctx.moveTo(14, 4);
+      ctx.lineTo(34, 10);
+      ctx.lineTo(18, 12);
+      ctx.closePath();
+      ctx.fill();
+      weaponHighlight(ctx);
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.moveTo(18, 6);
-      ctx.lineTo(26, 12);
-      ctx.lineTo(16, 10);
+      ctx.moveTo(14, -4);
+      ctx.lineTo(34, -10);
+      ctx.lineTo(18, -12);
       ctx.closePath();
       ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(18, -6);
-      ctx.lineTo(26, -12);
-      ctx.lineTo(16, -10);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = glow;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(-12, -14);
-      ctx.lineTo(12, -14);
-      ctx.stroke();
+      weaponHighlight(ctx);
       break;
     case "guardian":
-      ctx.fillStyle = color;
-      ctx.fillRect(-15, -14, 30, 28);
+      ctx.fillStyle = shadeHex(color, -20);
+      ctx.fillRect(-10, -4, 20, 18);
       ctx.fillStyle = "#546e7a";
-      ctx.beginPath();
-      ctx.arc(-14, 0, 15, -Math.PI / 2, Math.PI / 2);
-      ctx.fill();
+      ctx.fillRect(-28, -16, 14, 32);
       ctx.strokeStyle = glow;
-      ctx.lineWidth = 3;
-      ctx.stroke();
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(-28, -16, 14, 32);
+      weaponHighlight(ctx, 1.5);
       ctx.fillStyle = glow;
-      ctx.fillRect(2, -8, 12, 16);
-      ctx.strokeStyle = "#eceff1";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(2, -8, 12, 16);
-      ctx.fillStyle = color;
+      ctx.fillRect(-22, -6, 6, 12);
+      ctx.fillStyle = "#cfd8dc";
       ctx.beginPath();
-      ctx.arc(0, -16, 10, 0, Math.PI * 2);
+      ctx.moveTo(8, -6);
+      ctx.lineTo(8, 10);
+      ctx.lineTo(32, 6);
+      ctx.lineTo(32, -2);
+      ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = glow;
-      ctx.fillRect(-4, -20, 8, 6);
+      weaponHighlight(ctx);
+      ctx.fillStyle = color;
+      ctx.fillRect(10, -12, 6, 20);
       break;
     case "archer":
       ctx.fillStyle = color;
-      ctx.fillRect(-6, -12, 12, 22);
+      ctx.fillRect(-5, -2, 10, 16);
       ctx.strokeStyle = glow;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(10, 0, 22, -1.25, 1.25);
+      weaponHighlight(ctx, 1.5);
+      ctx.strokeStyle = "#8d6e63";
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(8, 0, 18, -1.2, 1.2);
+      ctx.moveTo(-14, 0);
+      ctx.lineTo(28, 0);
       ctx.stroke();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      weaponHighlight(ctx);
+      ctx.fillStyle = "#eceff1";
       ctx.beginPath();
-      ctx.moveTo(-12, 0);
-      ctx.lineTo(20, 0);
-      ctx.stroke();
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.moveTo(18, 0);
-      ctx.lineTo(28, -4);
-      ctx.lineTo(28, 4);
+      ctx.moveTo(26, 0);
+      ctx.lineTo(36, -4);
+      ctx.lineTo(36, 4);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = "#558b2f";
-      ctx.beginPath();
-      ctx.arc(0, -14, 8, 0, Math.PI * 2);
-      ctx.fill();
+      weaponHighlight(ctx);
+      ctx.fillStyle = shadeHex(color, -30);
+      ctx.fillRect(-8, -14, 6, 10);
       break;
     case "storm":
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(0, -18);
-      ctx.lineTo(8, -2);
-      ctx.lineTo(0, 10);
-      ctx.lineTo(-8, -2);
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(8, 2);
+      ctx.lineTo(0, -8);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = "#6d4c41";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(6, 8);
+      ctx.lineTo(6, -26);
+      ctx.stroke();
+      weaponHighlight(ctx, 1.5);
       ctx.strokeStyle = glow;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
       for (let i = 0; i < 3; i++) {
-        const ox = -10 + i * 10;
-        ctx.globalAlpha = 0.45 + Math.sin(time * 5 + i) * 0.3;
+        const ox = 6 + (-8 + i * 8);
+        ctx.globalAlpha = 0.55 + Math.sin(time * 5 + i) * 0.3;
         ctx.beginPath();
-        ctx.moveTo(ox, -20);
-        ctx.lineTo(ox + 4, -10);
-        ctx.lineTo(ox - 2, -6);
-        ctx.lineTo(ox + 6, 4);
+        ctx.moveTo(ox, -26);
+        ctx.lineTo(ox + 5, -14);
+        ctx.lineTo(ox - 3, -10);
+        ctx.lineTo(ox + 7, 0);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(0, -6, 4, 0, Math.PI * 2);
+      ctx.arc(6, -26, 5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
       break;
     default:
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.moveTo(20, 0);
-      ctx.lineTo(-8, 12);
-      ctx.lineTo(-4, 0);
-      ctx.lineTo(-8, -12);
+      ctx.moveTo(8, -2);
+      ctx.lineTo(36, 0);
+      ctx.lineTo(8, 2);
       ctx.closePath();
       ctx.fill();
-  }
-
-  if (!ghost) {
-    ctx.strokeStyle = glow;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
+      weaponHighlight(ctx);
   }
 }
 

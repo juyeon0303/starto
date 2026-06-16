@@ -13,6 +13,41 @@ function shade(hex, amt) {
   return `rgb(${r},${g},${b})`;
 }
 
+function weaponEdge(ctx, width = 1.25) {
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+function drawEnemyCore(ctx, r, color, glow) {
+  ctx.fillStyle = shade(color, -35);
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.35, r * 0.55);
+  ctx.lineTo(r * 0.35, r * 0.55);
+  ctx.lineTo(r * 0.28, -r * 0.15);
+  ctx.lineTo(-r * 0.28, -r * 0.15);
+  ctx.closePath();
+  ctx.fill();
+
+  const head = ctx.createRadialGradient(0, -r * 0.45, 0, 0, -r * 0.45, r * 0.38);
+  head.addColorStop(0, shade(color, 40));
+  head.addColorStop(0.6, color);
+  head.addColorStop(1, shade(color, -35));
+  ctx.fillStyle = head;
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.45, r * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
+
+  ctx.fillStyle = "#1a1208";
+  ctx.beginPath();
+  ctx.arc(-r * 0.12, -r * 0.48, r * 0.07, 0, Math.PI * 2);
+  ctx.arc(r * 0.12, -r * 0.48, r * 0.07, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 export function drawEnemyArt(ctx, e, time, opts = {}) {
   const atOrigin = opts.atOrigin ?? false;
 
@@ -52,14 +87,18 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
     ctx.lineWidth = 2;
     ctx.setLineDash([5, 5]);
     ctx.beginPath();
-    ctx.arc(0, 0, e.radius + 10, 0, Math.PI * 2);
+    ctx.moveTo(-e.radius - 8, -e.radius - 8);
+    ctx.lineTo(e.radius + 8, -e.radius - 8);
+    ctx.lineTo(e.radius + 8, e.radius + 8);
+    ctx.lineTo(-e.radius - 8, e.radius + 8);
+    ctx.closePath();
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
 
   ctx.shadowColor = glow;
-  ctx.shadowBlur = e.type === "boss" ? 26 : 14;
+  ctx.shadowBlur = e.type === "boss" ? 22 : 10;
 
   switch (e.type) {
     case "charger":
@@ -91,7 +130,7 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.75 + Math.sin(time * 18) * 0.2;
     ctx.beginPath();
-    ctx.arc(0, 0, e.radius + 6, 0, Math.PI * 2);
+    ctx.rect(-e.radius - 4, -e.radius - 6, (e.radius + 4) * 2, (e.radius + 6) * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
@@ -99,154 +138,208 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
   ctx.restore();
 }
 
-function drawBodyBase(ctx, r, color, glow) {
-  const g = ctx.createRadialGradient(0, -r * 0.2, 0, 0, 0, r * 1.2);
-  g.addColorStop(0, shade(color, 35));
-  g.addColorStop(0.55, color);
-  g.addColorStop(1, shade(color, -45));
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, r * 0.85, r, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = glow;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-}
-
 function drawCharger(ctx, e, glow, time, phase) {
   const r = e.radius;
-  drawBodyBase(ctx, r, e.color, glow);
-  ctx.fillStyle = shade(e.color, -30);
-  ctx.beginPath();
-  ctx.moveTo(r * 0.2, -r * 0.55);
-  ctx.lineTo(r * 1.15, -r * 0.15);
-  ctx.lineTo(r * 0.95, r * 0.35);
-  ctx.lineTo(r * 0.1, r * 0.15);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.moveTo(r * 0.95, -r * 0.35);
-  ctx.lineTo(r * 1.45, -r * 0.05);
-  ctx.lineTo(r * 1.05, r * 0.25);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(-r * 0.35, -r * 0.75);
-  ctx.lineTo(-r * 0.05, -r * 1.05);
-  ctx.lineTo(r * 0.15, -r * 0.7);
-  ctx.stroke();
-  ctx.globalAlpha = 0.25 + Math.sin(time * 8 + phase) * 0.15;
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(r * 1.1, 0, r * 0.35, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-}
+  drawEnemyCore(ctx, r, e.color, glow);
 
-function drawArcher(ctx, e, glow) {
-  const r = e.radius;
-  drawBodyBase(ctx, r * 0.9, e.color, glow);
-  ctx.fillStyle = shade(e.color, -40);
+  ctx.fillStyle = shade(e.color, -20);
   ctx.beginPath();
-  ctx.arc(0, -r * 0.15, r * 0.55, 0, Math.PI * 2);
+  ctx.moveTo(r * 0.15, -r * 0.2);
+  ctx.lineTo(r * 1.55, -r * 0.08);
+  ctx.lineTo(r * 1.65, r * 0.08);
+  ctx.lineTo(r * 0.15, r * 0.2);
+  ctx.closePath();
   ctx.fill();
+  weaponEdge(ctx);
+
+  ctx.fillStyle = "#cfd8dc";
+  ctx.fillRect(r * 0.05, -r * 0.34, r * 0.14, r * 0.68);
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(r * 0.05, -r * 0.34, r * 0.14, r * 0.68);
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.moveTo(r * 1.55, -r * 0.22);
+  ctx.lineTo(r * 1.85, 0);
+  ctx.lineTo(r * 1.55, r * 0.22);
+  ctx.closePath();
+  ctx.fill();
+  weaponEdge(ctx, 1);
+
+  ctx.globalAlpha = 0.35 + Math.sin(time * 8 + phase) * 0.15;
   ctx.strokeStyle = glow;
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(r * 0.35, 0, r * 0.95, -1.15, 1.15);
+  ctx.moveTo(r * 1.85, -r * 0.35);
+  ctx.lineTo(r * 2.05, 0);
+  ctx.lineTo(r * 1.85, r * 0.35);
   ctx.stroke();
-  ctx.strokeStyle = e.color;
-  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 1;
+}
+
+function drawArcher(ctx, e, glow, time) {
+  const r = e.radius;
+  drawEnemyCore(ctx, r * 0.95, e.color, glow);
+
+  ctx.fillStyle = shade(e.color, -45);
+  ctx.fillRect(-r * 0.55, -r * 0.15, r * 0.35, r * 0.55);
+
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(-r * 0.5, 0);
-  ctx.lineTo(r * 1.1, 0);
+  ctx.arc(r * 0.42, 0, r * 1.05, -1.25, 1.25);
+  weaponEdge(ctx, 1.5);
+
+  ctx.strokeStyle = "#8d6e63";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.65, 0);
+  ctx.lineTo(r * 1.35, 0);
   ctx.stroke();
-  ctx.fillStyle = glow;
+  weaponEdge(ctx);
+
+  ctx.fillStyle = "#eceff1";
   ctx.beginPath();
-  ctx.moveTo(r * 0.95, 0);
-  ctx.lineTo(r * 1.35, -r * 0.12);
-  ctx.lineTo(r * 1.35, r * 0.12);
+  ctx.moveTo(r * 1.28, 0);
+  ctx.lineTo(r * 1.62, -r * 0.1);
+  ctx.lineTo(r * 1.62, r * 0.1);
   ctx.closePath();
   ctx.fill();
+  weaponEdge(ctx);
+
+  ctx.fillStyle = glow;
+  ctx.globalAlpha = 0.5 + Math.sin(time * 6) * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.42 + r * 1.05 * Math.cos(-0.4), r * 1.05 * Math.sin(-0.4));
+  ctx.lineTo(r * 0.42 + r * 1.05 * Math.cos(0.4), r * 1.05 * Math.sin(0.4));
+  ctx.lineTo(r * 1.35, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 function drawBulwark(ctx, e, glow) {
   const r = e.radius;
-  ctx.fillStyle = shade(e.color, -25);
-  ctx.fillRect(-r * 0.55, -r * 0.95, r * 1.1, r * 1.9);
-  ctx.fillStyle = e.color;
-  ctx.beginPath();
-  ctx.arc(0, -r * 0.35, r * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = shade(e.color, -35);
-  ctx.beginPath();
-  ctx.arc(-r * 0.95, 0, r * 0.75, -Math.PI / 2, Math.PI / 2);
-  ctx.fill();
+  drawEnemyCore(ctx, r * 0.85, e.color, glow);
+
+  ctx.fillStyle = shade(e.color, -40);
+  ctx.fillRect(-r * 1.35, -r * 1.05, r * 0.72, r * 2.1);
   ctx.strokeStyle = glow;
   ctx.lineWidth = 2.5;
-  ctx.stroke();
+  ctx.strokeRect(-r * 1.35, -r * 1.05, r * 0.72, r * 2.1);
+  weaponEdge(ctx, 1.5);
+
   ctx.fillStyle = glow;
-  ctx.globalAlpha = 0.85;
-  ctx.fillRect(-r * 0.15, -r * 0.25, r * 0.55, r * 0.5);
+  ctx.globalAlpha = 0.75;
+  ctx.fillRect(-r * 1.05, -r * 0.35, r * 0.38, r * 0.7);
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = shade(e.color, 30);
+
+  ctx.strokeStyle = shade(e.color, 35);
   ctx.lineWidth = 1;
   for (let i = -1; i <= 1; i++) {
     ctx.beginPath();
-    ctx.moveTo(-r * 0.4, i * r * 0.35);
-    ctx.lineTo(r * 0.35, i * r * 0.35);
+    ctx.moveTo(-r * 1.22, i * r * 0.38);
+    ctx.lineTo(-r * 0.72, i * r * 0.38);
     ctx.stroke();
   }
+
+  ctx.fillStyle = "#b0bec5";
+  ctx.beginPath();
+  ctx.moveTo(r * 0.35, -r * 0.55);
+  ctx.lineTo(r * 0.35, r * 0.55);
+  ctx.lineTo(r * 1.15, r * 0.35);
+  ctx.lineTo(r * 1.15, -r * 0.35);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.5;
+  weaponEdge(ctx);
+
+  ctx.fillStyle = glow;
+  ctx.fillRect(r * 0.55, -r * 0.75, r * 0.12, r * 1.5);
 }
 
 function drawSkirmisher(ctx, e, glow, time, phase) {
   const r = e.radius;
-  drawBodyBase(ctx, r * 0.85, e.color, glow);
-  ctx.fillStyle = shade(e.color, -50);
+  drawEnemyCore(ctx, r * 0.82, e.color, glow);
+
+  ctx.fillStyle = shade(e.color, -55);
   ctx.beginPath();
   ctx.moveTo(0, -r * 0.75);
-  ctx.lineTo(r * 0.45, -r * 0.15);
-  ctx.lineTo(0, r * 0.15);
-  ctx.lineTo(-r * 0.45, -r * 0.15);
+  ctx.lineTo(r * 0.35, -r * 0.1);
+  ctx.lineTo(0, r * 0.2);
+  ctx.lineTo(-r * 0.35, -r * 0.1);
   ctx.closePath();
   ctx.fill();
-  const sway = Math.sin(time * 6 + phase) * 0.25;
+
+  const sway = Math.sin(time * 6 + phase) * 0.22;
+  ctx.fillStyle = "#eceff1";
+  ctx.beginPath();
+  ctx.moveTo(r * (0.55 + sway), r * 0.05);
+  ctx.lineTo(r * (1.45 + sway), r * 0.42);
+  ctx.lineTo(r * (0.95 + sway), r * 0.58);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = glow;
+  ctx.lineWidth = 1.5;
+  weaponEdge(ctx);
+
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.moveTo(r * (0.7 + sway), r * 0.1);
-  ctx.lineTo(r * (1.35 + sway), r * 0.45);
-  ctx.lineTo(r * (0.85 + sway), r * 0.55);
+  ctx.moveTo(r * (0.55 - sway), -r * 0.05);
+  ctx.lineTo(r * (1.45 - sway), -r * 0.42);
+  ctx.lineTo(r * (0.95 - sway), -r * 0.58);
   ctx.closePath();
   ctx.fill();
+  weaponEdge(ctx);
+
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(r * (0.7 - sway), -r * 0.1);
-  ctx.lineTo(r * (1.35 - sway), -r * 0.45);
-  ctx.lineTo(r * (0.85 - sway), -r * 0.55);
-  ctx.closePath();
-  ctx.fill();
+  ctx.moveTo(r * (0.95 + sway), r * 0.58);
+  ctx.lineTo(r * (1.45 + sway), r * 0.42);
+  ctx.moveTo(r * (0.95 - sway), -r * 0.58);
+  ctx.lineTo(r * (1.45 - sway), -r * 0.42);
+  ctx.stroke();
 }
 
 function drawCaster(ctx, e, glow, time, phase) {
   const r = e.radius;
-  drawBodyBase(ctx, r, e.color, glow);
+  drawEnemyCore(ctx, r, e.color, glow);
+
   ctx.fillStyle = shade(e.color, -35);
   ctx.beginPath();
-  ctx.moveTo(0, -r * 1.05);
-  ctx.lineTo(r * 0.75, r * 0.85);
-  ctx.lineTo(-r * 0.75, r * 0.85);
+  ctx.moveTo(0, -r * 0.25);
+  ctx.lineTo(r * 0.55, r * 0.75);
+  ctx.lineTo(-r * 0.55, r * 0.75);
   ctx.closePath();
   ctx.fill();
+
+  ctx.strokeStyle = "#8d6e63";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(r * 0.35, r * 0.55);
+  ctx.lineTo(r * 0.35, -r * 1.35);
+  ctx.stroke();
+  weaponEdge(ctx, 1.5);
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(r * 0.35, -r * 1.35, r * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
   for (let i = 0; i < 3; i++) {
     const a = time * 2 + phase + (i * Math.PI * 2) / 3;
-    const ox = Math.cos(a) * r * 0.95;
-    const oy = Math.sin(a) * r * 0.55 - r * 0.1;
+    const ox = r * 0.35 + Math.cos(a) * r * 0.55;
+    const oy = -r * 1.35 + Math.sin(a) * r * 0.35;
     ctx.fillStyle = glow;
     ctx.globalAlpha = 0.55 + Math.sin(time * 5 + i) * 0.25;
     ctx.beginPath();
-    ctx.arc(ox, oy, 3, 0, Math.PI * 2);
+    ctx.arc(ox, oy, 2.5, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
@@ -254,45 +347,67 @@ function drawCaster(ctx, e, glow, time, phase) {
 
 function drawBoss(ctx, e, glow, time, phase) {
   const r = e.radius;
+  drawEnemyCore(ctx, r * 1.05, e.color, glow);
+
   ctx.fillStyle = shade(e.color, -30);
   ctx.beginPath();
-  ctx.moveTo(0, -r * 1.15);
-  ctx.lineTo(r * 0.95, -r * 0.35);
-  ctx.lineTo(r * 0.75, r * 1.05);
-  ctx.lineTo(-r * 0.75, r * 1.05);
-  ctx.lineTo(-r * 0.95, -r * 0.35);
+  ctx.moveTo(-r * 0.55, -r * 0.15);
+  ctx.lineTo(r * 0.55, -r * 0.15);
+  ctx.lineTo(r * 0.45, r * 0.85);
+  ctx.lineTo(-r * 0.45, r * 0.85);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.35, -r * 1.05);
+  ctx.lineTo(0, -r * 1.35);
+  ctx.lineTo(r * 0.35, -r * 1.05);
+  ctx.lineTo(r * 0.15, -r * 0.75);
+  ctx.lineTo(-r * 0.15, -r * 0.75);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = "#cfd8dc";
+  ctx.beginPath();
+  ctx.moveTo(r * 0.25, -r * 0.35);
+  ctx.lineTo(r * 0.25, r * 0.45);
+  ctx.lineTo(r * 1.65, r * 0.15);
+  ctx.lineTo(r * 1.75, -r * 0.05);
+  ctx.lineTo(r * 1.45, -r * 0.55);
   ctx.closePath();
   ctx.fill();
   ctx.strokeStyle = glow;
   ctx.lineWidth = 2;
-  ctx.stroke();
+  weaponEdge(ctx, 1.5);
+
   ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.moveTo(-r * 0.35, -r * 1.25);
-  ctx.lineTo(0, -r * 1.55);
-  ctx.lineTo(r * 0.35, -r * 1.25);
-  ctx.lineTo(r * 0.15, -r * 0.95);
-  ctx.lineTo(-r * 0.15, -r * 0.95);
+  ctx.moveTo(r * 1.65, -r * 0.55);
+  ctx.lineTo(r * 2.05, -r * 0.15);
+  ctx.lineTo(r * 1.65, r * 0.25);
   ctx.closePath();
   ctx.fill();
+  weaponEdge(ctx);
+
   ctx.globalAlpha = 0.2 + Math.sin(time * 3 + phase) * 0.1;
   ctx.strokeStyle = glow;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(0, 0, r * 1.35, 0, Math.PI * 2);
+  ctx.moveTo(-r * 1.1, -r * 0.5);
+  ctx.lineTo(r * 2.1, -r * 0.5);
+  ctx.lineTo(r * 2.1, r * 0.5);
+  ctx.lineTo(-r * 1.1, r * 0.5);
+  ctx.closePath();
   ctx.stroke();
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = "#fff";
-  ctx.globalAlpha = 0.8;
-  ctx.beginPath();
-  ctx.arc(-r * 0.22, -r * 0.45, 2.5, 0, Math.PI * 2);
-  ctx.arc(r * 0.22, -r * 0.45, 2.5, 0, Math.PI * 2);
-  ctx.fill();
   ctx.globalAlpha = 1;
 }
 
 function drawGeneric(ctx, e, glow) {
-  drawBodyBase(ctx, e.radius, e.color, glow);
+  drawEnemyCore(ctx, e.radius, e.color, glow);
+  ctx.fillStyle = glow;
+  ctx.fillRect(e.radius * 0.2, -e.radius * 0.12, e.radius * 0.9, e.radius * 0.24);
+  weaponEdge(ctx);
 }
 
 export function updateEnemyFacing(e, player) {

@@ -233,7 +233,7 @@ export function renderFrame(game, ctx) {
       const body = worldToScreen(e.x, e.y, lift);
       ctx.save();
       ctx.translate(body.x, body.y);
-      ctx.scale(1.06, 1.06);
+      ctx.scale(1.18, 1.18);
       drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
       ctx.restore();
     });
@@ -261,6 +261,7 @@ export function renderFrame(game, ctx) {
       const body = worldToScreen(p.x, p.y, lift);
       ctx.save();
       ctx.translate(body.x, body.y);
+      ctx.scale(1.14, 1.14);
       drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
       ctx.restore();
     });
