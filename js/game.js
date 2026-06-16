@@ -40,6 +40,17 @@ import {
   projKindFor,
   themeFor,
 } from "./champ-vfx.js";
+import {
+  ambientPickupCount,
+  createBuffPickup,
+  createHealPickup,
+  formatTempBuffs,
+  healAmountForWave,
+  lootDropChance,
+  mergeCombatFx,
+  mergeTempFx,
+  rollLootKind,
+} from "./loot.js";
 
 const SKILL_DMG = 3.8;
 const SKILL2_DMG = 2.4;
@@ -79,6 +90,9 @@ export class Game {
     this.runAugments = [];
     this.scoutAugmentOptions = null;
     this.waveBuff = {};
+    this.waveTempBuff = {};
+    this.pickups = [];
+    this._combatFxMerged = null;
     this.keys = {};
     this.mouse = { x: W / 2, y: H / 2 };
     this.invuln = 0;
@@ -206,6 +220,9 @@ export class Game {
     this.paused = false;
     this.runAugments = [];
     this.waveBuff = {};
+    this.waveTempBuff = {};
+    this.pickups = [];
+    this.invalidateCombatFx();
     this.player = this.makePlayer(champ);
     initVfx(this);
     this.setupSkillUi(champ);
@@ -341,6 +358,108 @@ export class Game {
 
   recomputeWaveBuff() {
     this.waveBuff = mergeAugmentFx(this.runAugments);
+    this.invalidateCombatFx();
+  }
+
+  invalidateCombatFx() {
+    this._combatFxMerged = null;
+  }
+
+  combatFx() {
+    if (!this._combatFxMerged) {
+      this._combatFxMerged = mergeCombatFx(this.waveBuff, this.waveTempBuff);
+    }
+    return this._combatFxMerged;
+  }
+
+  randomArenaPoint(margin = 48) {
+    return this.clampInArena(
+      PAD + margin + Math.random() * (W - PAD * 2 - margin * 2),
+      PAD + margin + Math.random() * (H - PAD * 2 - margin * 2),
+      14
+    );
+  }
+
+  spawnPickup(x, y, data) {
+    const pos = this.clampInArena(x + (Math.random() - 0.5) * 16, y + (Math.random() - 0.5) * 16, 14);
+    this.pickups.push({
+      x: pos.x,
+      y: pos.y,
+      radius: 14,
+      life: 14 + this.wave * 0.8,
+      bob: Math.random() * Math.PI * 2,
+      ...data,
+    });
+  }
+
+  spawnAmbientPickups() {
+    const maxHp = this.player?.maxHp ?? 100;
+    const n = ambientPickupCount(this.wave);
+    for (let i = 0; i < n; i++) {
+      const pt = this.randomArenaPoint();
+      const kind = this.wave <= 3 || Math.random() < 0.55 ? "heal" : "buff";
+      const data =
+        kind === "heal" ? createHealPickup(this.wave, maxHp) : createBuffPickup(this.wave);
+      this.spawnPickup(pt.x, pt.y, data);
+    }
+  }
+
+  tryDropLoot(e) {
+    const drops = e.type === "boss" ? 2 : 1;
+    for (let i = 0; i < drops; i++) {
+      if (i === 0 && Math.random() > lootDropChance(this.wave, e.type)) continue;
+      if (i === 1 && e.type !== "boss") continue;
+
+      const kind =
+        e.type === "boss"
+          ? i === 0
+            ? "heal"
+            : "buff"
+          : rollLootKind(this.wave, e.type);
+      const maxHp = this.player?.maxHp ?? 100;
+      const data =
+        kind === "heal" ? createHealPickup(this.wave, maxHp) : createBuffPickup(this.wave);
+      const ang = (Math.PI * 2 * i) / drops + Math.random() * 0.6;
+      const dist = e.type === "boss" ? 28 : 12;
+      this.spawnPickup(e.x + Math.cos(ang) * dist, e.y + Math.sin(ang) * dist, data);
+    }
+  }
+
+  collectPickup(p) {
+    if (!this.player) return;
+    const pl = this.player;
+
+    if (p.kind === "heal") {
+      const heal = p.amount ?? healAmountForWave(this.wave, pl.maxHp);
+      pl.hp = Math.min(pl.maxHp, pl.hp + heal);
+      if (pl.hpTrail != null) pl.hpTrail = pl.hp / pl.maxHp;
+      addFloatText(this, pl.x, pl.y - 20, `+${heal} HP`, "#69f0ae", 15);
+      addRing(this, pl.x, pl.y, "#69f0ae", 55);
+    } else {
+      this.waveTempBuff = mergeTempFx(this.waveTempBuff, p.fx);
+      this.invalidateCombatFx();
+      addFloatText(this, pl.x, pl.y - 20, p.name, p.color || "#ffd166", 16);
+      addRing(this, pl.x, pl.y, p.glow || p.color, 65);
+      addFlash(this, p.glow || p.color, 0.12);
+    }
+    spawnBurst(this, p.x, p.y, p.glow || p.color, false);
+    this.sfx.playSkill("secondary");
+  }
+
+  updatePickups(dt) {
+    const p = this.player;
+    if (!p) return;
+
+    this.pickups = this.pickups.filter((pick) => {
+      pick.life -= dt;
+      pick.bob += dt * 4;
+      if (pick.life <= 0) return false;
+      if (Math.hypot(pick.x - p.x, pick.y - p.y) < pick.radius + p.radius + 6) {
+        this.collectPickup(pick);
+        return false;
+      }
+      return true;
+    });
   }
 
   applyAugmentInstant(aug) {
@@ -480,6 +599,9 @@ export class Game {
     this.enemyProjectiles = [];
     this.zones = [];
     this.traps = [];
+    this.pickups = [];
+    this.waveTempBuff = {};
+    this.invalidateCombatFx();
     this.spawnQueue = [];
     this.spawnTimer = 0;
 
@@ -492,6 +614,7 @@ export class Game {
     });
 
     this.message = `웨이브 ${this.wave} · 증강 ${this.runAugments.length}/${WAVE_COUNT}`;
+    this.spawnAmbientPickups();
     this.setCombatUiVisible(true);
     this.updateHud();
   }
@@ -597,31 +720,32 @@ export class Game {
   }
 
   speedMult() {
-    return 1 + (this.waveBuff.speedBonus || 0);
+    return 1 + (this.combatFx().speedBonus || 0);
   }
 
   skillCdMult() {
-    return 1 - (this.waveBuff.skillCdBonus || 0);
+    return 1 - (this.combatFx().skillCdBonus || 0);
   }
 
   dmgVsEnemy(e, base) {
     let dmg = base;
-    if (this.waveBuff.armorBonus && (e.type === "bulwark" || e.type === "boss")) {
-      dmg *= 1 + this.waveBuff.armorBonus;
+    const fx = this.combatFx();
+    if (fx.armorBonus && (e.type === "bulwark" || e.type === "boss")) {
+      dmg *= 1 + fx.armorBonus;
     }
-    if (this.waveBuff.huntBonus && (e.type === "skirmisher" || e.type === "archer")) {
-      dmg *= 1 + this.waveBuff.huntBonus;
+    if (fx.huntBonus && (e.type === "skirmisher" || e.type === "archer")) {
+      dmg *= 1 + fx.huntBonus;
     }
     if (e.armor) dmg *= 1 - e.armor;
     return dmg;
   }
 
   skillDamage(mult = 1) {
-    return this.champion.damage * SKILL_DMG * mult * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+    return this.champion.damage * SKILL_DMG * mult * this.eventSkill * (1 + (this.combatFx().skillBonus || 0));
   }
 
   skill2Damage() {
-    return this.champion.damage * SKILL2_DMG * this.eventSkill * (1 + (this.waveBuff.skillBonus || 0));
+    return this.champion.damage * SKILL2_DMG * this.eventSkill * (1 + (this.combatFx().skillBonus || 0));
   }
 
   nearestEnemy(maxDist = Infinity) {
@@ -738,7 +862,7 @@ export class Game {
     if (e.hp < 0.05) e.hp = 0;
     this.sfx.playHit(isSkill, e.type === "boss");
     addShake(this, isSkill ? (e.type === "boss" ? 5 : 3) : 2);
-    const ls = this.waveBuff.lifesteal;
+    const ls = this.combatFx().lifesteal;
     if (ls && this.player?.hp > 0) {
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + dmg * ls);
     }
@@ -801,7 +925,7 @@ export class Game {
 
   spaceInterval() {
     const rate = this.champion?.spaceRate ?? 2.6;
-    const rush = 1 + (this.waveBuff.skillCdBonus || 0) * 0.5;
+    const rush = 1 + (this.combatFx().skillCdBonus || 0) * 0.5;
     return 1 / (rate * rush);
   }
 
@@ -857,7 +981,7 @@ export class Game {
   }
 
   basicRange() {
-    const bonus = 1 + (this.waveBuff.rangeBonus || 0);
+    const bonus = 1 + (this.combatFx().rangeBonus || 0);
     return (this.champion?.range ?? 60) * this.eventFog * bonus;
   }
 
@@ -892,7 +1016,7 @@ export class Game {
       this.champion.damage *
       BASIC_DMG *
       this.eventSkill *
-      (1 + (this.waveBuff.skillBonus || 0) + (this.waveBuff.basicBonus || 0));
+      (1 + (this.combatFx().skillBonus || 0) + (this.combatFx().basicBonus || 0));
     const type = this.champion.spaceType;
     if (type === "bolt" || type === "shot" || type === "zap") {
       dmg *= this.rangedFalloff(dist);
@@ -1179,10 +1303,11 @@ export class Game {
     const p = this.player;
     if (this.invuln > 0) return;
 
-    if (source === "proj" && this.waveBuff.projReduce) amount *= 1 - this.waveBuff.projReduce;
-    if (source === "zone" && this.waveBuff.zoneReduce) amount *= 1 - this.waveBuff.zoneReduce;
-    if ((source === "charge" || source === "boss") && this.waveBuff.chargeReduce) {
-      amount *= 1 - this.waveBuff.chargeReduce;
+    const fx = this.combatFx();
+    if (source === "proj" && fx.projReduce) amount *= 1 - fx.projReduce;
+    if (source === "zone" && fx.zoneReduce) amount *= 1 - fx.zoneReduce;
+    if ((source === "charge" || source === "boss") && fx.chargeReduce) {
+      amount *= 1 - fx.chargeReduce;
     }
 
     p.hp -= amount * this.eventDefense;
@@ -1400,6 +1525,8 @@ export class Game {
     if (this.invuln > 0) this.invuln -= dt;
     if (this.smokeTimer > 0) this.smokeTimer -= dt;
 
+    this.updatePickups(dt);
+
     if (AUTO_ATTACK_ENABLED) this.autoAttack(dt);
 
     while (this.spawnQueue.length && this.spawnQueue[0].at <= this.spawnTimer) {
@@ -1466,6 +1593,7 @@ export class Game {
       const e = this.enemies[i];
       if (e.hp <= 0) {
         const def = ENEMIES[e.type];
+        this.tryDropLoot(e);
         this.sfx.playKill();
         spawnBurst(this, e.x, e.y, def?.glow || e.color, e.type === "boss");
         if (e.type === "boss") addShake(this, 6);
@@ -1545,6 +1673,8 @@ export class Game {
     if (this.champion && this.state === "combat") {
       parts.push(this.champion.name);
     }
+    const tempLoot = formatTempBuffs(this.waveTempBuff);
+    if (tempLoot) parts.push(`아이템 ${tempLoot}`);
     const waveInfo = parts.join(" · ") || "—";
     if (this.hudCache.waveInfo !== waveInfo) {
       this.hudCache.waveInfo = waveInfo;

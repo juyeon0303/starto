@@ -189,6 +189,12 @@ export function renderFrame(game, ctx) {
   game.traps.forEach((t) => push(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
   game.zones.forEach((z) => push(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
 
+  if (game.pickups?.length) {
+    game.pickups.forEach((pick) =>
+      push(pick.x, pick.y, 4, () => drawPickupIso(ctx, pick, game.bgTime), -0.2)
+    );
+  }
+
   game.rings.forEach((r) =>
     push(r.x, r.y, 0, () => {
       ctx.globalAlpha = r.t * 0.7;
@@ -596,6 +602,56 @@ function drawAmbientParticlesIso(ctx, game) {
   }
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
+}
+
+function drawPickupIso(ctx, pick, time) {
+  const bob = Math.sin(time * 3.5 + pick.bob) * 3;
+  const pos = worldToScreen(pick.x, pick.y, 6 + bob);
+  const pulse = 0.75 + Math.sin(time * 5 + pick.bob) * 0.2;
+  const r = pick.radius * ISO_SCALE * (0.95 + pulse * 0.08);
+
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.globalAlpha = 0.35 + pulse * 0.25;
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 1.8);
+  g.addColorStop(0, pick.glow || pick.color);
+  g.addColorStop(1, "transparent");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = pick.color;
+  ctx.strokeStyle = pick.glow || "#fff";
+  ctx.lineWidth = 2;
+  ctx.shadowColor = pick.glow || pick.color;
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.arc(0, 0, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.font = `${Math.round(r * 1.15)}px Syne, Malgun Gothic, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#fff";
+  ctx.fillText(pick.icon || "?", 0, 1);
+
+  if (pick.kind === "heal" && pick.amount) {
+    ctx.font = "bold 9px Syne, Malgun Gothic, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fillText(`+${pick.amount}`, 0, -r - 8);
+  } else if (pick.kind === "buff") {
+    ctx.font = "bold 8px Syne, Malgun Gothic, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
+    ctx.fillText(pick.name || "", 0, -r - 8);
+  }
+
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  ctx.restore();
 }
 
 function drawTrapIso(ctx, t, time) {
