@@ -82,6 +82,8 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
   const face = e.faceAngle ?? 0;
 
   ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
   if (!atOrigin) ctx.translate(e.x, e.y + bob);
   else ctx.translate(0, bob);
   ctx.rotate(face);
@@ -137,9 +139,9 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
     ctx.beginPath();
     ctx.rect(-e.radius - 4, -e.radius - 6, (e.radius + 4) * 2, (e.radius + 6) * 2);
     ctx.stroke();
-    ctx.globalAlpha = 1;
   }
 
+  ctx.globalAlpha = 1;
   ctx.restore();
 }
 

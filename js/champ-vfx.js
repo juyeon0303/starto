@@ -74,6 +74,9 @@ export function themeFor(champ) {
 export function addFx(game, fx) {
   if (!game.fx) game.fx = [];
   game.fx.push({ ...fx, t: fx.t ?? fx.maxT ?? 0.4 });
+  if (game.fx.length > 48) {
+    game.fx.splice(0, game.fx.length - 48);
+  }
 }
 
 export function updateFx(game, dt) {
@@ -86,11 +89,11 @@ export function updateFx(game, dt) {
 }
 
 export function drawFx(ctx, game) {
-  if (!game.fx) return;
+  if (!game.fx?.length || game.state !== "combat") return;
   resetFxDrawState(ctx);
   const time = game.bgTime || 0;
   for (const f of game.fx) {
-    const life = f.t / (f.maxT || 0.4);
+    const life = Math.max(0, Math.min(1, f.t / (f.maxT || 0.4)));
     const lift = f.kind === "afterimage" ? entityLift(16) : 4;
     ctx.save();
     switch (f.kind) {

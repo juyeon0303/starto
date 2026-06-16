@@ -115,6 +115,7 @@ export function clearTransientVfx(game) {
   game.rings = [];
   game.sparks = [];
   game.trails = [];
+  game.floatTexts = [];
   game.flash = 0;
   game.shake = 0;
 }
@@ -130,42 +131,6 @@ export function resetDrawState(ctx) {
 
 function shouldDrawPlayer(game) {
   return !!game.player && (game.state === "combat" || game.state === "scout");
-}
-
-function drawPlayerSprite(ctx, game) {
-  const p = game.player;
-  if (!shouldDrawPlayer(game)) return;
-  const lift = entityLift(p.radius);
-  const body = worldToScreen(p.x, p.y, lift);
-  resetDrawState(ctx);
-  ctx.save();
-  ctx.translate(Math.round(body.x), Math.round(body.y));
-  ctx.scale(1.14, 1.14);
-  drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-  ctx.restore();
-  resetDrawState(ctx);
-}
-
-function drawPlayerHpBar(ctx, game) {
-  const p = game.player;
-  if (!p || game.state !== "combat") return;
-  const th = themeFor(game.champion);
-  const lift = entityLift(p.radius);
-  const hp = worldToScreen(p.x, p.y, lift + 42);
-  const pct = p.hp / p.maxHp;
-  if (p.hpTrail == null) p.hpTrail = pct;
-  p.hpTrail += (pct - p.hpTrail) * 0.22;
-  ctx.save();
-  ctx.globalAlpha = 1;
-  drawHpBar(ctx, hp.x, hp.y, 68, 9, pct, th.accent, {
-    glow: true,
-    autoColor: true,
-    showText: true,
-    hp: p.hp,
-    maxHp: p.maxHp,
-    trailPct: p.hpTrail,
-  });
-  ctx.restore();
 }
 
 export function updateVfx(game, dt) {
@@ -222,6 +187,20 @@ export function updateVfx(game, dt) {
   }
 }
 
+function drawLayerList(ctx, layers) {
+  layers.sort((a, b) => a.depth - b.depth);
+  for (const l of layers) {
+    ctx.save();
+    try {
+      resetDrawState(ctx);
+      l.draw();
+    } finally {
+      ctx.restore();
+      resetDrawState(ctx);
+    }
+  }
+}
+
 export function renderFrame(game, ctx) {
   const dpr = game.dpr || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -246,22 +225,26 @@ export function renderFrame(game, ctx) {
     drawBasicRangeIndicator(ctx, game);
   }
 
-  const layers = [];
-  const push = (wx, wy, lift, draw, bias = 0) => {
-    layers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
+  const groundLayers = [];
+  const entityLayers = [];
+  const pushGround = (wx, wy, lift, draw, bias = 0) => {
+    groundLayers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
+  };
+  const pushEntity = (wx, wy, lift, draw, bias = 0) => {
+    entityLayers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
   };
 
-  game.traps.forEach((t) => push(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
-  game.zones.forEach((z) => push(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
+  game.traps.forEach((t) => pushGround(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
+  game.zones.forEach((z) => pushGround(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
 
   if (game.pickups?.length) {
     game.pickups.forEach((pick) =>
-      push(pick.x, pick.y, 4, () => drawPickupIso(ctx, pick, game.bgTime), -0.2)
+      pushGround(pick.x, pick.y, 4, () => drawPickupIso(ctx, pick, game.bgTime), -0.2)
     );
   }
 
   game.rings.forEach((r) =>
-    push(r.x, r.y, 0, () => {
+    pushGround(r.x, r.y, 0, () => {
       ctx.globalAlpha = r.t * 0.7;
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 3;
@@ -276,7 +259,7 @@ export function renderFrame(game, ctx) {
   );
 
   game.trails.forEach((tr) =>
-    push(tr.x2, tr.y2, 2, () => {
+    pushGround(tr.x2, tr.y2, 2, () => {
       ctx.globalAlpha = tr.life * 0.5;
       ctx.strokeStyle = tr.color;
       ctx.lineWidth = tr.width;
@@ -286,13 +269,26 @@ export function renderFrame(game, ctx) {
     })
   );
 
-  game.enemyProjectiles.forEach((pr) =>
-    push(pr.x, pr.y, 14, () => drawProjectileIso(ctx, pr, false), 0.5)
+  game.sparks.forEach((s) =>
+    pushGround(s.x, s.y, 8, () => {
+      const p = worldToScreen(s.x, s.y, 8);
+      ctx.globalAlpha = s.t;
+      ctx.fillStyle = s.color;
+      ctx.shadowColor = s.color;
+      ctx.shadowBlur = 5;
+      ctx.fillRect(p.x, p.y, s.size, s.size);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+    })
+  );
+
+  game.particles.forEach((fx) =>
+    pushGround(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
   );
 
   game.enemies.forEach((e) => {
     const lift = entityLift(e.radius);
-    push(e.x, e.y, lift, () => {
+    pushEntity(e.x, e.y, lift, () => {
       drawGroundShadow(ctx, e.x, e.y, e.radius);
       const body = worldToScreen(e.x, e.y, lift);
       ctx.save();
@@ -301,7 +297,7 @@ export function renderFrame(game, ctx) {
       drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
       ctx.restore();
     });
-    push(e.x, e.y, lift + 34, () => {
+    pushEntity(e.x, e.y, lift + 34, () => {
       const hp = worldToScreen(e.x, e.y, lift + 36);
       const pct = e.hp / e.maxHp;
       if (e.hpTrail == null) e.hpTrail = pct;
@@ -318,41 +314,50 @@ export function renderFrame(game, ctx) {
 
   if (shouldDrawPlayer(game)) {
     const p = game.player;
+    const th = themeFor(game.champion);
     const lift = entityLift(p.radius);
-    push(p.x, p.y, lift, () => drawGroundShadow(ctx, p.x, p.y, p.radius));
+    pushEntity(p.x, p.y, lift, () => {
+      drawGroundShadow(ctx, p.x, p.y, p.radius);
+      const body = worldToScreen(p.x, p.y, lift);
+      ctx.save();
+      ctx.translate(Math.round(body.x), Math.round(body.y));
+      ctx.scale(1.14, 1.14);
+      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
+      ctx.restore();
+    }, 0.015);
+    if (game.state === "combat") {
+      pushEntity(p.x, p.y, lift + 40, () => {
+        const hp = worldToScreen(p.x, p.y, lift + 42);
+        const pct = p.hp / p.maxHp;
+        if (p.hpTrail == null) p.hpTrail = pct;
+        p.hpTrail += (pct - p.hpTrail) * 0.22;
+        drawHpBar(ctx, hp.x, hp.y, 68, 9, pct, th.accent, {
+          glow: true,
+          autoColor: true,
+          showText: true,
+          hp: p.hp,
+          maxHp: p.maxHp,
+          trailPct: p.hpTrail,
+        });
+      }, 0.02);
+    }
   }
 
-  game.sparks.forEach((s) =>
-    push(s.x, s.y, 8, () => {
-      const p = worldToScreen(s.x, s.y, 8);
-      ctx.globalAlpha = s.t;
-      ctx.fillStyle = s.color;
-      ctx.shadowColor = s.color;
-      ctx.shadowBlur = 5;
-      ctx.fillRect(p.x, p.y, s.size, s.size);
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
-    })
-  );
-
-  game.particles.forEach((fx) =>
-    push(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
+  game.enemyProjectiles.forEach((pr) =>
+    pushEntity(pr.x, pr.y, 14, () => drawProjectileIso(ctx, pr, false), 0.5)
   );
 
   game.projectiles.forEach((pr) =>
-    push(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
+    pushEntity(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
   );
 
-  layers.sort((a, b) => a.depth - b.depth);
-  layers.forEach((l) => {
-    ctx.save();
-    try {
-      l.draw();
-    } finally {
-      ctx.restore();
-    }
-  });
-  drawFx(ctx, game);
+  drawLayerList(ctx, groundLayers);
+  resetDrawState(ctx);
+  if (game.state === "combat") {
+    drawFx(ctx, game);
+  }
+  resetDrawState(ctx);
+  drawLayerList(ctx, entityLayers);
 
   game.floatTexts.forEach((f) => {
     const p = worldToScreen(f.x, f.y, entityLift(16) + 20);
@@ -377,26 +382,6 @@ export function renderFrame(game, ctx) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
-
-  drawPlayerOverlay(ctx, game);
-}
-
-function drawPlayerOverlay(ctx, game) {
-  if (!shouldDrawPlayer(game)) return;
-
-  const shake = game.shake || 0;
-  const sx = shake ? Math.sin(game.bgTime * 52) * shake * 1.15 : 0;
-  const sy = shake ? Math.cos(game.bgTime * 47) * shake * 1.15 : 0;
-
-  resetDrawState(ctx);
-  ctx.save();
-  ctx.translate(sx, sy);
-  drawPlayerSprite(ctx, game);
-  if (game.state === "combat") {
-    drawPlayerHpBar(ctx, game);
-  }
-  ctx.restore();
-  resetDrawState(ctx);
 }
 
 function drawBasicRangeIndicator(ctx, game) {
