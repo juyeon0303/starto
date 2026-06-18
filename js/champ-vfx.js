@@ -14,14 +14,6 @@ import {
   drawWarMace,
 } from "./weapon-art.js";
 
-function resetFxDrawState(ctx) {
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-  ctx.shadowBlur = 0;
-  ctx.shadowColor = "transparent";
-  ctx.setLineDash([]);
-}
-
 export const CHAMP_THEMES = {
   blade: {
     color: "#ff7043",
@@ -74,28 +66,24 @@ export function themeFor(champ) {
 export function addFx(game, fx) {
   if (!game.fx) game.fx = [];
   game.fx.push({ ...fx, t: fx.t ?? fx.maxT ?? 0.4 });
-  if (game.fx.length > 48) {
-    game.fx.splice(0, game.fx.length - 48);
-  }
 }
 
 export function updateFx(game, dt) {
   if (!game.fx) return;
   game.fx = game.fx.filter((f) => {
-    if (f.kind === "afterimage") return false;
     f.t -= dt;
-    if (!Number.isFinite(f.t)) return false;
     return f.t > 0;
   });
 }
 
 export function drawFx(ctx, game) {
-  if (!game.fx?.length || game.state !== "combat") return;
-  resetFxDrawState(ctx);
+  if (!game.fx || game.state !== "combat") return;
   const time = game.bgTime || 0;
   for (const f of game.fx) {
-    const life = Math.max(0, Math.min(1, f.t / (f.maxT || 0.4)));
-    const lift = f.kind === "afterimage" ? entityLift(16) : 4;
+    if (f.kind === "afterimage") continue;
+    const maxT = f.maxT || 0.4;
+    const life = Math.max(0, Math.min(1, f.t / maxT));
+    const lift = 4;
     ctx.save();
     switch (f.kind) {
       case "slashArc": {
@@ -270,7 +258,6 @@ export function drawFx(ctx, game) {
         break;
       }
       case "afterimage":
-        // 잔상 실루엣은 라이브 플레이어 위에 겹쳐 '투명 유령'처럼 보임 — 링만 표시
         break;
       case "pull": {
         ctx.globalAlpha = life * 0.35;
@@ -305,9 +292,6 @@ export function drawFx(ctx, game) {
     }
     ctx.restore();
   }
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-  ctx.setLineDash([]);
 }
 
 export function playSpaceVfx(game, champ, p, angle) {
@@ -724,7 +708,6 @@ export function projKindFor(champ, slot = "space") {
 }
 
 function drawChampTorso(ctx, color, glow) {
-  ctx.globalAlpha = 1;
   ctx.fillStyle = shadeHex(color, -40);
   ctx.beginPath();
   ctx.moveTo(-9, 10);
@@ -756,7 +739,6 @@ function drawChampHead(ctx, champId, color, glow) {
   head.addColorStop(0, glow);
   head.addColorStop(0.55, color);
   head.addColorStop(1, shadeHex(color, -35));
-  ctx.globalAlpha = 1;
   ctx.fillStyle = head;
   ctx.beginPath();
   ctx.arc(0, -10, 8, 0, Math.PI * 2);
@@ -807,7 +789,6 @@ function drawChampBody(ctx, champId, time, ghost = false) {
 }
 
 function drawChampWeapons(ctx, champId, time, color, glow) {
-  ctx.save();
   switch (champId) {
     case "blade":
       drawSword(ctx, { glow, accent: color, scale: 1 });
@@ -851,21 +832,14 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
     default:
       drawSword(ctx, { glow, accent: color, scale: 0.9 });
   }
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-  ctx.restore();
 }
 
-export function drawChampPlayer(ctx, p, champ, time, invuln, smoke, opts = {}) {
-  const solid = opts.solid ?? false;
+export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   const id = champ?.id || "blade";
   const t = themeFor(champ);
   const bob = Math.sin(time * 8) * 1.2;
 
   ctx.save();
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-  ctx.shadowBlur = 0;
   ctx.translate(p.x, p.y);
   ctx.translate(0, bob);
 
@@ -877,18 +851,17 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke, opts = {}) {
   ctx.globalAlpha = 1;
 
   ctx.save();
+  ctx.shadowColor = t.glow;
+  ctx.shadowBlur = 14;
   ctx.rotate(p.angle);
   drawChampTorso(ctx, t.color, t.glow);
   drawChampWeapons(ctx, id, time, t.color, t.glow);
+  ctx.shadowBlur = 0;
   ctx.restore();
 
-  ctx.globalAlpha = 1;
   drawChampHead(ctx, id, t.color, t.glow);
 
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-
-  if (!solid && invuln > 0) {
+  if (invuln > 0) {
     ctx.strokeStyle = id === "guardian" ? t.glow : "#ffd166";
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.5 + Math.sin(time * 14) * 0.3;
@@ -897,34 +870,31 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke, opts = {}) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   }
+  ctx.restore();
 
-  if (!solid && smoke > 0 && id === "rogue") {
+  if (smoke > 0 && id === "rogue") {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.55, smoke * 0.5);
     ctx.fillStyle = "#455a64";
     ctx.beginPath();
-    ctx.arc(0, 0, smokeR, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, smokeR, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = Math.min(0.35, smoke * 0.35);
     ctx.strokeStyle = t.glow;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, smokeR + 8, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, smokeR + 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
-  } else if (!solid && smoke > 0) {
+  } else if (smoke > 0) {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.45, smoke * 0.4);
     ctx.fillStyle = "#78909c";
     ctx.beginPath();
-    ctx.arc(0, 0, smokeR, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, smokeR, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
-
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
-  ctx.restore();
 }
 
 export function drawChampProjectile(ctx, pr) {

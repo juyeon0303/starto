@@ -129,18 +129,22 @@ export function resetDrawState(ctx) {
   ctx.filter = "none";
 }
 
-/** clip 누수 시에도 엔티티가 잘리지 않도록 캔버스 상태 복구 */
-function resetCanvasClip(ctx) {
-  if (typeof ctx.reset === "function") {
-    const t = ctx.getTransform();
-    ctx.reset();
-    ctx.setTransform(t);
-  }
-  resetDrawState(ctx);
-}
-
 function shouldDrawPlayer(game) {
   return !!game.player && (game.state === "combat" || game.state === "scout");
+}
+
+function drawSortedLayers(ctx, layers) {
+  layers.sort((a, b) => a.depth - b.depth || a.order - b.order);
+  for (const layer of layers) {
+    ctx.save();
+    try {
+      resetDrawState(ctx);
+      layer.draw();
+    } finally {
+      ctx.restore();
+      resetDrawState(ctx);
+    }
+  }
 }
 
 export function updateVfx(game, dt) {
@@ -197,68 +201,6 @@ export function updateVfx(game, dt) {
   }
 }
 
-function drawLayerList(ctx, layers) {
-  layers.sort((a, b) => a.depth - b.depth || a.order - b.order);
-  for (const l of layers) {
-    ctx.save();
-    try {
-      resetDrawState(ctx);
-      l.draw();
-    } finally {
-      ctx.restore();
-      resetDrawState(ctx);
-    }
-  }
-}
-
-function drawEnemyBody(ctx, game, e) {
-  const lift = entityLift(e.radius);
-  drawGroundShadow(ctx, e.x, e.y, e.radius);
-  const body = worldToScreen(e.x, e.y, lift);
-  ctx.save();
-  resetDrawState(ctx);
-  ctx.translate(body.x, body.y);
-  ctx.scale(1.18, 1.18);
-  drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true, solid: true });
-  ctx.restore();
-  resetDrawState(ctx);
-}
-
-function drawPlayerBody(ctx, game, solid = false) {
-  const p = game.player;
-  if (!p) return;
-  const lift = entityLift(p.radius);
-  drawGroundShadow(ctx, p.x, p.y, p.radius);
-  const body = worldToScreen(p.x, p.y, lift);
-  ctx.save();
-  resetDrawState(ctx);
-  ctx.translate(Math.round(body.x), Math.round(body.y));
-  ctx.scale(1.14, 1.14);
-  drawChampPlayer(
-    ctx,
-    { ...p, x: 0, y: 0 },
-    game.champion,
-    game.bgTime,
-    solid ? 0 : game.invuln,
-    solid ? 0 : game.smokeTimer,
-    { solid }
-  );
-  ctx.restore();
-  resetDrawState(ctx);
-}
-
-/** 스킬 FX·데미지 텍스트 위에 캐릭터/몬스터를 다시 그려 유령처럼 보이는 현상 방지 */
-function drawOpaqueEntityOverlay(ctx, game) {
-  if (game.state !== "combat" && game.state !== "scout") return;
-  resetCanvasClip(ctx);
-  resetDrawState(ctx);
-
-  game.enemies.forEach((e) => drawEnemyBody(ctx, game, e));
-  if (shouldDrawPlayer(game)) {
-    drawPlayerBody(ctx, game, game.state === "combat");
-  }
-}
-
 export function renderFrame(game, ctx) {
   const dpr = game.dpr || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -277,35 +219,27 @@ export function renderFrame(game, ctx) {
   darkenOutsideArena(ctx);
   drawAmbientParticlesIso(ctx, game);
 
-  const groundLayers = [];
-  const entityLayers = [];
-  let layerOrder = 0;
-  const pushGround = (wx, wy, lift, draw, bias = 0) => {
-    groundLayers.push({
-      depth: worldToScreen(wx, wy, lift).depth + bias,
-      order: layerOrder++,
-      draw,
-    });
+  const ground = [];
+  const entities = [];
+  let order = 0;
+  const addGround = (wx, wy, lift, draw, bias = 0) => {
+    ground.push({ depth: worldToScreen(wx, wy, lift).depth + bias, order: order++, draw });
   };
-  const pushEntity = (wx, wy, lift, draw, bias = 0) => {
-    entityLayers.push({
-      depth: worldToScreen(wx, wy, lift).depth + bias,
-      order: layerOrder++,
-      draw,
-    });
+  const addEntity = (wx, wy, lift, draw, bias = 0) => {
+    entities.push({ depth: worldToScreen(wx, wy, lift).depth + bias, order: order++, draw });
   };
 
-  game.traps.forEach((t) => pushGround(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
-  game.zones.forEach((z) => pushGround(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
+  game.traps.forEach((t) => addGround(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
+  game.zones.forEach((z) => addGround(z.x, z.y, 0, () => drawZoneIso(ctx, z, game.bgTime), -0.4));
 
   if (game.pickups?.length) {
     game.pickups.forEach((pick) =>
-      pushGround(pick.x, pick.y, 4, () => drawPickupIso(ctx, pick, game.bgTime), -0.2)
+      addGround(pick.x, pick.y, 4, () => drawPickupIso(ctx, pick, game.bgTime), -0.2)
     );
   }
 
   game.rings.forEach((r) =>
-    pushGround(r.x, r.y, 0, () => {
+    addGround(r.x, r.y, 0, () => {
       ctx.globalAlpha = r.t * 0.7;
       ctx.strokeStyle = r.color;
       ctx.lineWidth = 3;
@@ -320,7 +254,7 @@ export function renderFrame(game, ctx) {
   );
 
   game.trails.forEach((tr) =>
-    pushGround(tr.x2, tr.y2, 2, () => {
+    addGround(tr.x2, tr.y2, 2, () => {
       ctx.globalAlpha = tr.life * 0.5;
       ctx.strokeStyle = tr.color;
       ctx.lineWidth = tr.width;
@@ -331,7 +265,7 @@ export function renderFrame(game, ctx) {
   );
 
   game.sparks.forEach((s) =>
-    pushGround(s.x, s.y, 8, () => {
+    addGround(s.x, s.y, 8, () => {
       const p = worldToScreen(s.x, s.y, 8);
       ctx.globalAlpha = s.t;
       ctx.fillStyle = s.color;
@@ -344,11 +278,11 @@ export function renderFrame(game, ctx) {
   );
 
   game.particles.forEach((fx) =>
-    pushGround(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
+    addGround(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
   );
 
   if (game.state === "combat" && game.player) {
-    pushGround(
+    addGround(
       game.player.x,
       game.player.y,
       entityLift(game.player.radius) * 0.2,
@@ -359,8 +293,16 @@ export function renderFrame(game, ctx) {
 
   game.enemies.forEach((e) => {
     const lift = entityLift(e.radius);
-    pushEntity(e.x, e.y, lift, () => drawEnemyBody(ctx, game, e));
-    pushEntity(e.x, e.y, lift + 34, () => {
+    addEntity(e.x, e.y, lift, () => {
+      drawGroundShadow(ctx, e.x, e.y, e.radius);
+      const body = worldToScreen(e.x, e.y, lift);
+      ctx.save();
+      ctx.translate(body.x, body.y);
+      ctx.scale(1.18, 1.18);
+      drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
+      ctx.restore();
+    });
+    addEntity(e.x, e.y, lift + 34, () => {
       const hp = worldToScreen(e.x, e.y, lift + 36);
       const pct = e.hp / e.maxHp;
       if (e.hpTrail == null) e.hpTrail = pct;
@@ -379,9 +321,17 @@ export function renderFrame(game, ctx) {
     const p = game.player;
     const th = themeFor(game.champion);
     const lift = entityLift(p.radius);
-    pushEntity(p.x, p.y, lift, () => drawPlayerBody(ctx, game, false), 0.015);
+    addEntity(p.x, p.y, lift, () => {
+      drawGroundShadow(ctx, p.x, p.y, p.radius);
+      const body = worldToScreen(p.x, p.y, lift);
+      ctx.save();
+      ctx.translate(Math.round(body.x), Math.round(body.y));
+      ctx.scale(1.14, 1.14);
+      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
+      ctx.restore();
+    }, 0.015);
     if (game.state === "combat") {
-      pushEntity(p.x, p.y, lift + 40, () => {
+      addEntity(p.x, p.y, lift + 40, () => {
         const hp = worldToScreen(p.x, p.y, lift + 42);
         const pct = p.hp / p.maxHp;
         if (p.hpTrail == null) p.hpTrail = pct;
@@ -399,21 +349,20 @@ export function renderFrame(game, ctx) {
   }
 
   game.enemyProjectiles.forEach((pr) =>
-    pushEntity(pr.x, pr.y, 14, () => drawProjectileIso(ctx, pr, false), 0.5)
+    addEntity(pr.x, pr.y, 14, () => drawProjectileIso(ctx, pr, false), 0.5)
   );
 
   game.projectiles.forEach((pr) =>
-    pushEntity(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
+    addEntity(pr.x, pr.y, 12, () => drawProjectileIso(ctx, pr, true))
   );
 
-  drawLayerList(ctx, groundLayers);
+  drawSortedLayers(ctx, ground);
   resetDrawState(ctx);
   if (game.state === "combat") {
     drawFx(ctx, game);
   }
   resetDrawState(ctx);
-  resetCanvasClip(ctx);
-  drawLayerList(ctx, entityLayers);
+  drawSortedLayers(ctx, entities);
 
   game.floatTexts.forEach((f) => {
     const p = worldToScreen(f.x, f.y, entityLift(16) + 20);
@@ -438,11 +387,6 @@ export function renderFrame(game, ctx) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
-
-  ctx.save();
-  ctx.translate(sx, sy);
-  drawOpaqueEntityOverlay(ctx, game);
-  ctx.restore();
 }
 
 function drawBasicRangeIndicator(ctx, game) {
@@ -587,10 +531,9 @@ function drawArenaBg(ctx, time, eventId) {
   drawArenaPillarsIso(ctx, time);
 }
 
-/** 아레나 밖(캔버스 모서리) 밝기 편차 제거 — entityLift 만큼 구멍 확장 */
+/** 아레나 밖(캔버스 모서리) 밝기 편차 제거 */
 function darkenOutsideArena(ctx) {
-  const margin = entityLift(22);
-  const corners = arenaCornersWorld().map(([x, y]) => worldToScreen(x, y, -margin));
+  const corners = arenaCornersWorld().map(([x, y]) => worldToScreen(x, y, 0));
   ctx.save();
   ctx.fillStyle = "rgba(4, 7, 14, 0.88)";
   ctx.beginPath();
@@ -665,8 +608,14 @@ function drawIsoPlatform(ctx, time) {
 
   if (arenaImgReady) {
     ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(tl.x, tl.y);
+    ctx.lineTo(tr.x, tr.y);
+    ctx.lineTo(br.x, br.y);
+    ctx.lineTo(bl.x, bl.y);
+    ctx.closePath();
+    ctx.clip();
     ctx.globalAlpha = 0.18;
-    // clip() 사용 시 entityLift로 화면 밖으로 나간 캐릭터/몬스터가 특정 위치에서 잘림
     ctx.drawImage(ARENA_IMG, tl.x, tl.y - 20, tr.x - tl.x + 40, br.y - tl.y + 40);
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -937,24 +886,23 @@ function drawArenaBorderIso(ctx, time) {
 }
 
 function drawTopBannerIso(ctx, game) {
-  const left = PAD + 20;
-  const top = PAD + 12;
+  const anchor = worldToScreen(PAD + 20, PAD + 12, 0);
   ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-  ctx.fillRect(left, top, 340, 32);
+  ctx.fillRect(anchor.x, anchor.y, 340, 32);
   ctx.font = "600 13px Syne, Malgun Gothic, sans-serif";
   ctx.fillStyle = "#c8d6e5";
-  ctx.fillText(game.message || "", left + 10, top + 21);
+  ctx.fillText(game.message || "", anchor.x + 10, anchor.y + 21);
 
   if (game.runAugments?.length && game.state === "combat") {
-    const right = W - PAD - 20;
+    const right = worldToScreen(W - PAD - 20, PAD + 12, 0);
     ctx.textAlign = "right";
     ctx.fillStyle = "#ffd166";
     ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
     const last = game.runAugments[game.runAugments.length - 1];
     ctx.fillText(
       `◆ 증강 ${game.runAugments.length}/${8} · ${last.icon}${last.name}`,
-      right,
-      top + 21
+      right.x,
+      right.y + 21
     );
     ctx.textAlign = "left";
   }
