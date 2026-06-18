@@ -147,6 +147,71 @@ function drawSortedLayers(ctx, layers) {
   }
 }
 
+function drawEnemySprite(ctx, game, e, opts = {}) {
+  const solid = opts.solid ?? false;
+  const lift = entityLift(e.radius);
+  if (!solid) drawGroundShadow(ctx, e.x, e.y, e.radius);
+  const body = worldToScreen(e.x, e.y, lift);
+  ctx.save();
+  resetDrawState(ctx);
+  ctx.globalAlpha = 1;
+  ctx.translate(body.x, body.y);
+  ctx.scale(1.18, 1.18);
+  drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true, solid });
+  ctx.restore();
+  resetDrawState(ctx);
+}
+
+function drawPlayerSprite(ctx, game, opts = {}) {
+  const solid = opts.solid ?? false;
+  const p = game.player;
+  if (!p) return;
+  const lift = entityLift(p.radius);
+  if (!solid) drawGroundShadow(ctx, p.x, p.y, p.radius);
+  const body = worldToScreen(p.x, p.y, lift);
+  ctx.save();
+  resetDrawState(ctx);
+  ctx.globalAlpha = 1;
+  ctx.translate(Math.round(body.x), Math.round(body.y));
+  ctx.scale(1.14, 1.14);
+  drawChampPlayer(
+    ctx,
+    { ...p, x: 0, y: 0 },
+    game.champion,
+    game.bgTime,
+    solid ? 0 : game.invuln,
+    solid ? 0 : game.smokeTimer,
+    { solid }
+  );
+  ctx.restore();
+  resetDrawState(ctx);
+}
+
+/** 스킬 FX·반투명 오버레이 위에 캐릭터/몬스터를 다시 그려 유령처럼 보이는 현상 방지 */
+function drawOpaqueEntitySprites(ctx, game) {
+  if (game.state !== "combat" && game.state !== "scout") return;
+  if (!game.enemies?.length && !shouldDrawPlayer(game)) return;
+
+  const sprites = [];
+  let order = 0;
+  const addSprite = (wx, wy, lift, draw, bias = 0) => {
+    sprites.push({ depth: worldToScreen(wx, wy, lift).depth + bias, order: order++, draw });
+  };
+
+  game.enemies.forEach((e) => {
+    const lift = entityLift(e.radius);
+    addSprite(e.x, e.y, lift, () => drawEnemySprite(ctx, game, e, { solid: true }), 0.015);
+  });
+
+  if (shouldDrawPlayer(game)) {
+    const p = game.player;
+    const lift = entityLift(p.radius);
+    addSprite(p.x, p.y, lift, () => drawPlayerSprite(ctx, game, { solid: true }), 0.02);
+  }
+
+  drawSortedLayers(ctx, sprites);
+}
+
 export function updateVfx(game, dt) {
   game.bgTime += dt;
   game.shake *= 0.86;
@@ -293,15 +358,7 @@ export function renderFrame(game, ctx) {
 
   game.enemies.forEach((e) => {
     const lift = entityLift(e.radius);
-    addEntity(e.x, e.y, lift, () => {
-      drawGroundShadow(ctx, e.x, e.y, e.radius);
-      const body = worldToScreen(e.x, e.y, lift);
-      ctx.save();
-      ctx.translate(body.x, body.y);
-      ctx.scale(1.18, 1.18);
-      drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
-      ctx.restore();
-    });
+    addEntity(e.x, e.y, lift, () => drawEnemySprite(ctx, game, e), 0);
     addEntity(e.x, e.y, lift + 34, () => {
       const hp = worldToScreen(e.x, e.y, lift + 36);
       const pct = e.hp / e.maxHp;
@@ -321,15 +378,7 @@ export function renderFrame(game, ctx) {
     const p = game.player;
     const th = themeFor(game.champion);
     const lift = entityLift(p.radius);
-    addEntity(p.x, p.y, lift, () => {
-      drawGroundShadow(ctx, p.x, p.y, p.radius);
-      const body = worldToScreen(p.x, p.y, lift);
-      ctx.save();
-      ctx.translate(Math.round(body.x), Math.round(body.y));
-      ctx.scale(1.14, 1.14);
-      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-      ctx.restore();
-    }, 0.015);
+    addEntity(p.x, p.y, lift, () => drawPlayerSprite(ctx, game), 0.015);
     if (game.state === "combat") {
       addEntity(p.x, p.y, lift + 40, () => {
         const hp = worldToScreen(p.x, p.y, lift + 42);
@@ -358,10 +407,16 @@ export function renderFrame(game, ctx) {
 
   drawSortedLayers(ctx, ground);
   resetDrawState(ctx);
-  if (game.state === "combat") {
-    drawFx(ctx, game);
+  ctx.save();
+  try {
+    resetDrawState(ctx);
+    if (game.state === "combat") {
+      drawFx(ctx, game);
+    }
+  } finally {
+    ctx.restore();
+    resetDrawState(ctx);
   }
-  resetDrawState(ctx);
   drawSortedLayers(ctx, entities);
 
   game.floatTexts.forEach((f) => {
@@ -378,6 +433,7 @@ export function renderFrame(game, ctx) {
 
   drawArenaBorderIso(ctx, game.bgTime);
   drawTopBannerIso(ctx, game);
+  drawOpaqueEntitySprites(ctx, game);
 
   ctx.restore();
 

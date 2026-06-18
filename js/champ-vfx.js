@@ -66,12 +66,17 @@ export function themeFor(champ) {
 export function addFx(game, fx) {
   if (!game.fx) game.fx = [];
   game.fx.push({ ...fx, t: fx.t ?? fx.maxT ?? 0.4 });
+  if (game.fx.length > 48) {
+    game.fx.splice(0, game.fx.length - 48);
+  }
 }
 
 export function updateFx(game, dt) {
   if (!game.fx) return;
   game.fx = game.fx.filter((f) => {
+    if (f.kind === "afterimage") return false;
     f.t -= dt;
+    if (!Number.isFinite(f.t)) return false;
     return f.t > 0;
   });
 }
@@ -292,6 +297,10 @@ export function drawFx(ctx, game) {
     }
     ctx.restore();
   }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
+  ctx.setLineDash([]);
 }
 
 export function playSpaceVfx(game, champ, p, angle) {
@@ -356,14 +365,6 @@ export function playSpaceVfx(game, champ, p, angle) {
       });
       break;
     case "stab":
-      addFx(game, {
-        kind: "afterimage",
-        x: p.x - Math.cos(angle) * 20,
-        y: p.y - Math.sin(angle) * 20,
-        angle,
-        champId: champ.id,
-        maxT: 0.32,
-      });
       addFx(game, {
         kind: "magicCone",
         x: p.x,
@@ -834,12 +835,15 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
   }
 }
 
-export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
+export function drawChampPlayer(ctx, p, champ, time, invuln, smoke, opts = {}) {
+  const solid = opts.solid ?? false;
   const id = champ?.id || "blade";
   const t = themeFor(champ);
   const bob = Math.sin(time * 8) * 1.2;
 
   ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
   ctx.translate(p.x, p.y);
   ctx.translate(0, bob);
 
@@ -861,7 +865,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
 
   drawChampHead(ctx, id, t.color, t.glow);
 
-  if (invuln > 0) {
+  if (!solid && invuln > 0) {
     ctx.strokeStyle = id === "guardian" ? t.glow : "#ffd166";
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.5 + Math.sin(time * 14) * 0.3;
@@ -872,7 +876,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   }
   ctx.restore();
 
-  if (smoke > 0 && id === "rogue") {
+  if (!solid && smoke > 0 && id === "rogue") {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.55, smoke * 0.5);
     ctx.fillStyle = "#455a64";
@@ -886,7 +890,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
     ctx.arc(p.x, p.y, smokeR + 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
-  } else if (smoke > 0) {
+  } else if (!solid && smoke > 0) {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.45, smoke * 0.4);
     ctx.fillStyle = "#78909c";

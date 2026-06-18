@@ -55,8 +55,9 @@ function drawEnemyCore(ctx, r, color, glow) {
 
 export function drawEnemyArt(ctx, e, time, opts = {}) {
   const atOrigin = opts.atOrigin ?? false;
+  const solid = opts.solid ?? false;
 
-  if (e.state === "windup") {
+  if (e.state === "windup" && !solid) {
     const len = e.type === "boss" ? 120 : 90;
     const a = worldToScreen(e.x, e.y, 0);
     const b = worldToScreen(
@@ -82,11 +83,13 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
   const face = e.faceAngle ?? 0;
 
   ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
   if (!atOrigin) ctx.translate(e.x, e.y + bob);
   else ctx.translate(0, bob);
   ctx.rotate(face);
 
-  if (e.state === "windup") {
+  if (e.state === "windup" && !solid) {
     ctx.globalAlpha = 0.35 + Math.sin(time * 16) * 0.2;
     ctx.strokeStyle = "#ff2d55";
     ctx.lineWidth = 2;
@@ -103,7 +106,7 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
   }
 
   ctx.shadowColor = glow;
-  ctx.shadowBlur = e.type === "boss" ? 22 : 10;
+  ctx.shadowBlur = solid ? 0 : e.type === "boss" ? 22 : 10;
 
   switch (e.type) {
     case "charger":
@@ -130,7 +133,7 @@ export function drawEnemyArt(ctx, e, time, opts = {}) {
 
   ctx.shadowBlur = 0;
 
-  if (e.stun > 0) {
+  if (e.stun > 0 && !solid) {
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     ctx.globalAlpha = 0.75 + Math.sin(time * 18) * 0.2;
