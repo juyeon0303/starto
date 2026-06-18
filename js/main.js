@@ -17,7 +17,9 @@ function skillSlot(id) {
 }
 
 const ui = {
-  waveNum: document.getElementById("wave-num"),
+  scoreNum: document.getElementById("score-num"),
+  timeNum: document.getElementById("time-num"),
+  comboNum: document.getElementById("combo-num"),
   waveInfo: document.getElementById("wave-info"),
   combatUi: document.getElementById("combat-ui"),
   combatHpFill: document.getElementById("combat-hp-fill"),

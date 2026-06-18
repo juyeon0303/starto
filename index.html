@@ -16,17 +16,25 @@
 
   <div id="app">
     <header>
-      <p class="brand-kicker">링크 스타또 · 5~10분 · 랭크 없음</p>
+      <p class="brand-kicker">링크 스타또 · 10분 서바이벌 · 점수 랭킹</p>
       <h1>링크 <span class="title-accent">스타또</span></h1>
     </header>
 
     <div id="hud" class="hud-minimal">
+      <div class="hud-block hud-score-block">
+        <span class="label">SCORE</span>
+        <span class="hud-value hud-score" id="score-num">0</span>
+      </div>
+      <div class="hud-block hud-time-block">
+        <span class="label">TIME</span>
+        <span class="hud-value hud-time" id="time-num">10:00</span>
+      </div>
       <div class="hud-block">
-        <span class="label">WAVE</span>
-        <span class="hud-value" id="wave-num">1 / 8</span>
+        <span class="label">COMBO</span>
+        <span class="hud-value hud-combo" id="combo-num">×0</span>
       </div>
       <div class="hud-block wide">
-        <span class="label">BRIEFING</span>
+        <span class="label">STATUS</span>
         <span class="hud-value sm muted" id="wave-info">—</span>
       </div>
     </div>
@@ -34,7 +42,7 @@
     <div id="augment-strip" class="augment-strip hidden">
       <span class="aug-strip-label">증강 빌드</span>
       <div id="augment-chips" class="aug-strip-chips"></div>
-      <span id="aug-count" class="aug-strip-count">0 / 8</span>
+      <span id="aug-count" class="aug-strip-count">증강 0</span>
     </div>
 
     <div class="play-stack">

@@ -130,7 +130,7 @@ export function resetDrawState(ctx) {
 }
 
 function shouldDrawPlayer(game) {
-  return !!game.player && (game.state === "combat" || game.state === "scout");
+  return !!game.player && game.state === "combat";
 }
 
 function drawSortedLayers(ctx, layers) {
@@ -189,7 +189,7 @@ function drawPlayerSprite(ctx, game, opts = {}) {
 
 /** 스킬 FX·반투명 오버레이 위에 캐릭터/몬스터를 다시 그려 유령처럼 보이는 현상 방지 */
 function drawOpaqueEntitySprites(ctx, game) {
-  if (game.state !== "combat" && game.state !== "scout") return;
+  if (game.state !== "combat") return;
   if (!game.enemies?.length && !shouldDrawPlayer(game)) return;
 
   const sprites = [];
@@ -956,10 +956,26 @@ function drawTopBannerIso(ctx, game) {
     ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
     const last = game.runAugments[game.runAugments.length - 1];
     ctx.fillText(
-      `◆ 증강 ${game.runAugments.length}/${8} · ${last.icon}${last.name}`,
+      `◆ 증강 ${game.runAugments.length} · ${last.icon}${last.name}`,
       right.x,
       right.y + 21
     );
+    ctx.textAlign = "left";
+  }
+
+  if (game.state === "combat" && game.scoreState) {
+    const center = worldToScreen(W / 2, PAD + 10, 0);
+    ctx.textAlign = "center";
+    ctx.font = "800 14px Syne, Malgun Gothic, sans-serif";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillText(`${game.scoreState.total.toLocaleString("ko-KR")} pt`, center.x + 1, center.y + 1);
+    ctx.fillStyle = "#ffd166";
+    ctx.fillText(`${game.scoreState.total.toLocaleString("ko-KR")} pt`, center.x, center.y);
+    if (game.scoreState.combo >= 2) {
+      ctx.font = "700 11px Syne, Malgun Gothic, sans-serif";
+      ctx.fillStyle = game.scoreState.combo >= 5 ? "#ff9100" : "#69f0ae";
+      ctx.fillText(`COMBO ×${game.scoreState.combo}`, center.x, center.y + 16);
+    }
     ctx.textAlign = "left";
   }
 }

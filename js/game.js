@@ -3,17 +3,31 @@ import {
   CHAMPIONS,
   DIFFICULTY,
   ENEMIES,
-  WAVE_COUNT,
   WAVE_EVENTS,
-  compositionRoles,
   formatAugmentStats,
   getScoutAugments,
   getWaveComposition,
   isAugmentRecommended,
   mergeAugmentFx,
   pickRandom,
-  summarizeComposition,
 } from "./data.js";
+import {
+  loadLeaderboard,
+  saveScore,
+  getBestScore,
+  renderLeaderboardTable,
+} from "./leaderboard.js";
+import {
+  ARCADE_DURATION,
+  COMBO_MILESTONE,
+  createScoreState,
+  formatScore,
+  formatTime,
+  registerKill,
+  registerWaveClear,
+  tickCombo,
+  timeUrgency,
+} from "./score.js";
 import {
   PAD,
   W,
@@ -114,6 +128,9 @@ export class Game {
     this.lastZapTarget = null;
     this.lastAttackSlot = "j";
     this.hudCache = {};
+    this.scoreState = createScoreState();
+    this.timeLeft = ARCADE_DURATION;
+    this.scorePopTimer = 0;
     this.setupCanvas();
     initVfx(this);
 
@@ -182,20 +199,29 @@ export class Game {
 
     const pitch = document.createElement("p");
     pitch.className = "welcome-pitch";
-    pitch.textContent = "8웨이브 · 5~10분";
+    pitch.textContent = "10분 · 점수 올리기 · 최고 기록 경신";
+
+    const best = getBestScore();
+    const bestLine = document.createElement("p");
+    bestLine.className = "welcome-best";
+    bestLine.innerHTML = best > 0
+      ? `최고 기록 <strong>${formatScore(best)}</strong> pt`
+      : "첫 기록을 남겨보세요";
 
     const btn = document.createElement("button");
     btn.className = "btn-start";
     btn.textContent = "스타또!";
     btn.onclick = () => this.openChampionPick();
 
-    wrap.append(pitch, btn);
-    this.showOverlay(
-      "링크 스타또",
-      "",
-      [wrap],
-      "welcome"
-    );
+    const lbPanel = document.createElement("div");
+    lbPanel.className = "lb-panel";
+    lbPanel.innerHTML = `
+      <p class="lb-title">TOP ${10} 랭킹</p>
+      ${renderLeaderboardTable(loadLeaderboard(), { limit: 5 })}
+    `;
+
+    wrap.append(pitch, bestLine, btn, lbPanel);
+    this.showOverlay("링크 스타또", "처치 · 콤보 · 웨이브 클리어로 점수를 쌓으세요.", [wrap], "welcome");
   }
 
   openChampionPick() {
@@ -229,6 +255,9 @@ export class Game {
     this.waveTempBuff = {};
     this.pickups = [];
     this.lastWaveClearHeal = 0;
+    this.scoreState = createScoreState();
+    this.timeLeft = ARCADE_DURATION;
+    this.scorePopTimer = 0;
     this.invalidateCombatFx();
     this.player = this.makePlayer(champ);
     initVfx(this);
@@ -239,11 +268,11 @@ export class Game {
     this.sfx.ensure();
     this.sfx.resume();
     this.audio.play();
-    this.prepareWave();
+    this.startNextWave(false);
   }
 
   isRunActive() {
-    return this.state === "combat" || this.state === "scout";
+    return this.state === "combat";
   }
 
   setRunControlsVisible(show) {
@@ -273,8 +302,8 @@ export class Game {
 
     const desc =
       this.state === "combat"
-        ? `웨이브 ${this.wave} · ${this.champion?.name || ""}`
-        : "증강 선택 중";
+        ? `${formatTime(this.timeLeft)} · ${formatScore(this.scoreState?.total ?? 0)} pt`
+        : "준비 중";
 
     this.showOverlay("일시정지", desc, [wrap], "pause");
   }
@@ -309,7 +338,6 @@ export class Game {
     this.hideOverlay();
     this.lastTime = performance.now();
     this.audio.resume();
-    if (this.state === "scout") this.showScoutOverlay();
   }
 
   exitToHome() {
@@ -528,108 +556,69 @@ export class Game {
     };
   }
 
-  prepareWave() {
+  autoGrantAugment() {
+    if (!this.pendingComposition) return null;
+    const enemyTypes = new Set(this.pendingComposition.map((g) => g.type));
+    const options = getScoutAugments(
+      this.pendingComposition,
+      this.runAugments.map((a) => a.id),
+      this.wave
+    );
+    if (!options.length) return null;
+    const aug =
+      options.find((a) => isAugmentRecommended(a, enemyTypes)) ||
+      pickRandom(options, 1)[0];
+    if (!aug || this.runAugments.some((a) => a.id === aug.id)) return null;
+    this.pickAugment(aug);
+    return aug;
+  }
+
+  startNextWave(fromClear = false) {
+    if (fromClear && this.timeLeft <= 0) {
+      this.endRun("time");
+      return;
+    }
+
     this.wave += 1;
-    this.state = "scout";
     clearTransientVfx(this);
     this.invuln = 0;
     this.smokeTimer = 0;
     this.paused = false;
     document.body.classList.remove("game-paused");
-    this.setCombatUiVisible(false);
+
+    if (fromClear) {
+      this.lastWaveClearHeal = this.applyWaveClearHeal();
+      const wavePts = registerWaveClear(this.scoreState, this.wave);
+      const p = this.player;
+      if (p) {
+        addFloatText(this, p.x, p.y - 24, `웨이브 ${this.wave}! +${formatScore(wavePts)}`, "#69f0ae", 18);
+        addFlash(this, "#69f0ae", 0.22);
+        addShake(this, 5);
+        this.scorePopTimer = 0.35;
+      }
+    } else {
+      this.lastWaveClearHeal = 0;
+    }
+
     this.pendingComposition = getWaveComposition(this.wave);
     this.event = pickRandom(WAVE_EVENTS, 1)[0];
     this.eventSkill = this.event.id === "surge" ? 1.15 : 1;
     this.eventDefense = this.event.id === "iron" ? 0.88 : 1;
     this.eventFog = this.event.id === "fog" ? 0.94 : 1;
-    this.scoutAugmentOptions = getScoutAugments(
-      this.pendingComposition,
-      this.runAugments.map((a) => a.id),
-      this.wave
-    );
-    this.showScoutOverlay();
-  }
 
-  showScoutOverlay() {
-    const roles = compositionRoles(this.pendingComposition);
-    const options = this.scoutAugmentOptions || [];
-    const summary = summarizeComposition(this.pendingComposition);
-    const enemyTypes = new Set(this.pendingComposition.map((g) => g.type));
-    const stackN = this.runAugments.length;
-
-    const content = document.createElement("div");
-    content.className = "scout-panel aug-draft";
-
-    const build = document.createElement("div");
-    build.className = "aug-build-panel";
-    build.innerHTML = `
-      <div class="aug-build-head">
-        <span class="aug-build-title">내 빌드</span>
-        <span class="aug-stack-badge">누적 ${stackN} / ${WAVE_COUNT}</span>
-      </div>
-      <p class="aug-stack-rule">웨이브마다 증강 1개 · <strong>런 내내 누적</strong> · 중복 불가</p>
-    `;
-    const chips = document.createElement("div");
-    chips.className = "aug-build-chips";
-    for (let i = 0; i < WAVE_COUNT; i++) {
-      const aug = this.runAugments[i];
-      const chip = document.createElement("span");
-      chip.className = aug
-        ? `aug-chip aug-tier-${aug.tier}`
-        : "aug-chip aug-chip-empty";
-      if (aug) {
-        chip.title = `${aug.name}\n${formatAugmentStats(aug.fx).join("\n")}`;
-        chip.innerHTML = `<span class="aug-chip-icon">${aug.icon}</span><span class="aug-chip-name">${aug.name}</span>`;
-      } else {
-        chip.textContent = `${i + 1}`;
-      }
-      chips.appendChild(chip);
-    }
-    build.appendChild(chips);
-    content.appendChild(build);
-
-    const intel = document.createElement("div");
-    intel.className = "scout-intel aug-intel-compact";
-    const clearHeal =
-      this.lastWaveClearHeal > 0
-        ? `<p class="wave-clear-heal">웨이브 클리어 회복 <strong>+${this.lastWaveClearHeal} HP</strong></p>`
-        : "";
-    intel.innerHTML = `
-      <p><strong>웨이브 ${this.wave}</strong> · ${this.event.name} — ${this.event.desc}</p>
-      ${clearHeal}
-      <p class="squad-line">적: ${summary}</p>
-      <ul class="role-list role-list-compact">
-        ${roles
-          .map(
-            (r) =>
-              `<li><span class="dot" style="background:${r.color}"></span>${r.name} ×${r.count} <em>${r.role}</em></li>`
-          )
-          .join("")}
-      </ul>
-    `;
-    content.appendChild(intel);
-
-    const picks = document.createElement("div");
-    picks.className = "aug-card-row";
-    options.forEach((aug) => {
-      picks.appendChild(
-        this.makeAugmentCard(aug, () => {
-          this.pickAugment(aug);
-          this.hideOverlay();
-          this.beginCombat();
-        }, isAugmentRecommended(aug, enemyTypes))
+    const aug = this.autoGrantAugment();
+    if (aug && this.player) {
+      addFloatText(
+        this,
+        this.player.x,
+        this.player.y - 40,
+        `${aug.icon} ${aug.name}`,
+        aug.tier === "prismatic" ? "#e040fb" : "#ffd166",
+        15
       );
-    });
-    content.appendChild(picks);
+    }
 
-    this.showOverlay(
-      "증강 선택",
-      "칼바람처럼 3장 중 1장. 고른 증강은 이번 판 끝까지 쌓입니다.",
-      [content],
-      "scout"
-    );
-    this.message = `웨이브 ${this.wave} — 증강 ${stackN + 1}/${WAVE_COUNT}`;
-    this.updateHud();
+    this.beginCombat();
   }
 
   beginCombat() {
@@ -651,62 +640,87 @@ export class Game {
     this.spawnQueue = [];
     this.spawnTimer = 0;
 
-    let t = 0.32;
+    let t = 0.22;
     this.pendingComposition.forEach((g) => {
       for (let i = 0; i < g.count; i++) {
         this.spawnQueue.push({ type: g.type, at: t, scale: g.scale });
-        t += 0.32;
+        t += Math.max(0.18, 0.28 - this.wave * 0.008);
       }
     });
 
-    this.message = `웨이브 ${this.wave} · 증강 ${this.runAugments.length}/${WAVE_COUNT}`;
+    this.message = `W${this.wave} · ${formatScore(this.scoreState.total)} pt · ${formatTime(this.timeLeft)}`;
     this.spawnAmbientPickups();
     this.setCombatUiVisible(true);
     this.updateHud();
   }
 
-  win() {
-    this.state = "win";
+  endRun(reason = "death") {
+    const survived = reason === "time";
+    this.state = survived ? "timeup" : "lose";
     this.paused = false;
     document.body.classList.remove("game-paused");
     this.audio.stop();
-    this.sfx.playClear();
+    if (survived) this.sfx.playClear();
     this.setMenuMode(true);
     this.setCombatUiVisible(false);
     this.setRunControlsVisible(false);
 
+    const entry = {
+      score: this.scoreState?.total ?? 0,
+      kills: this.scoreState?.kills ?? 0,
+      waves: this.wave,
+      maxCombo: this.scoreState?.maxCombo ?? 0,
+      champId: this.champion?.id ?? "",
+      champName: this.champion?.name ?? "—",
+    };
+    const { board, rank, isNewBest } = saveScore(entry);
+
     const hero = document.createElement("div");
-    hero.className = "clear-hero";
+    hero.className = "result-score-hero";
     hero.innerHTML = `
-      <img src="assets/images/kirito-clear.png" alt="검은 검사 승리" width="320" height="320" decoding="async" />
-      <p class="clear-hero-caption">링크 스타트 · 클리어</p>
+      <span class="big-score">${formatScore(entry.score)}</span>
+      <span class="rank-line${isNewBest ? " new-best" : ""}">
+        ${isNewBest ? "🎉 신기록!" : `#${rank} · TOP ${board.length}`}
+      </span>
     `;
 
-    this.showOverlay(
-      "클리어",
-      `${WAVE_COUNT}웨이브 돌파. 검은 검사의 승리.`,
-      [hero, this.makePickBtn("다시 하기", "처음부터", () => {
+    const stats = document.createElement("div");
+    stats.className = "result-stats";
+    stats.innerHTML = `
+      <div class="result-stat">처치<strong>${entry.kills}</strong></div>
+      <div class="result-stat">웨이브<strong>${entry.waves}</strong></div>
+      <div class="result-stat">최대 콤보<strong>×${entry.maxCombo}</strong></div>
+      <div class="result-stat">챔프<strong>${entry.champName}</strong></div>
+    `;
+
+    const lbPanel = document.createElement("div");
+    lbPanel.className = "lb-panel";
+    lbPanel.innerHTML = `
+      <p class="lb-title">랭킹</p>
+      ${renderLeaderboardTable(board, { limit: 5 })}
+    `;
+
+    const again = this.makePickBtn(
+      "다시 하기",
+      survived ? "10분 다시 도전" : "재도전",
+      () => {
         this.hideOverlay();
         this.showWelcome();
-      })],
-      "result-win"
+      }
+    );
+
+    this.showOverlay(
+      survived ? "타임!" : "함락",
+      survived
+        ? "10분 생존 · 점수가 기록되었습니다."
+        : `${formatScore(entry.score)} pt · 웨이브 ${this.wave}에서 전멸`,
+      [hero, stats, lbPanel, again],
+      survived ? "result-win" : "result"
     );
   }
 
   lose() {
-    this.state = "lose";
-    this.paused = false;
-    document.body.classList.remove("game-paused");
-    this.audio.stop();
-    this.setMenuMode(true);
-    this.setCombatUiVisible(false);
-    this.setRunControlsVisible(false);
-    this.showOverlay("패배", `웨이브 ${this.wave}에서 함락.`, [
-      this.makePickBtn("재도전", "처음부터", () => {
-        this.hideOverlay();
-        this.showWelcome();
-      }),
-    ], "result");
+    this.endRun("death");
   }
 
   clampInArena(x, y, radius = 0) {
@@ -924,20 +938,57 @@ export class Game {
     e.hp -= dmg;
     e.hp = Math.max(0, Math.round(e.hp * 10) / 10);
     if (e.hp < 0.05) e.hp = 0;
+    e.lastHitSkill = isSkill;
+    const th = themeFor(this.champion);
     this.sfx.playHit(this.lastAttackSlot || "j", e.type === "boss");
-    addShake(this, isSkill ? (e.type === "boss" ? 5 : 3) : 2);
+    addShake(this, isSkill ? (e.type === "boss" ? 7 : 4.5) : 3);
+    addRing(this, e.x, e.y, th.glow, isSkill ? (e.type === "boss" ? 72 : 52) : 34);
     const ls = this.combatFx().lifesteal;
     if (ls && this.player?.hp > 0) {
       this.player.hp = Math.min(this.player.maxHp, this.player.hp + dmg * ls);
     }
     if (isSkill) {
-      const th = themeFor(this.champion);
-      addFloatText(this, e.x, e.y, String(Math.round(dmg)), th.glow, isSkill ? 14 : 12);
+      addFloatText(this, e.x, e.y, String(Math.round(dmg)), th.glow, 15);
       spawnBurst(this, e.x, e.y, th.color, e.type === "boss");
+      addFlash(this, th.accent, e.type === "boss" ? 0.12 : 0.07);
     } else {
-      addFloatText(this, e.x, e.y, String(Math.round(dmg)), "#ffe082", 11);
+      addFloatText(this, e.x, e.y, String(Math.round(dmg)), "#ffe082", 12);
       spawnBurst(this, e.x, e.y, "#fff", false);
     }
+  }
+
+  onEnemyKilled(e) {
+    const def = ENEMIES[e.type];
+    const result = registerKill(this.scoreState, e.type, !!e.lastHitSkill);
+    this.scorePopTimer = 0.28;
+    const color = result.combo >= COMBO_MILESTONE ? "#ff9100" : "#ffd166";
+    addFloatText(
+      this,
+      e.x,
+      e.y - 18,
+      `+${formatScore(result.points)}`,
+      color,
+      result.combo >= 3 ? 17 : 15
+    );
+    if (result.combo >= 2) {
+      addFloatText(
+        this,
+        e.x,
+        e.y - 36,
+        `×${result.combo} COMBO`,
+        result.milestone ? "#ff5252" : "#69f0ae",
+        result.milestone ? 18 : 14
+      );
+    }
+    if (result.milestone) {
+      addFlash(this, "#ff9100", 0.25);
+      addShake(this, 8);
+      this.sfx.playSkill("primary");
+    }
+    spawnBurst(this, e.x, e.y, def?.glow || e.color, e.type === "boss");
+    addRing(this, e.x, e.y, def?.glow || e.color, e.type === "boss" ? 110 : 70);
+    if (e.type === "boss") addShake(this, 10);
+    this.sfx.playKill();
   }
 
   dealDamage(amount, x, y, radius, knock = 0, isSkill = true) {
@@ -1005,7 +1056,7 @@ export class Game {
       this.sfx.playSwing(this.champion?.spaceType);
       this.castSpace();
       p.spaceSwing = this.spaceInterval();
-      addFlash(this, themeFor(c).accent, 0.1);
+      addFlash(this, themeFor(c).accent, 0.14);
       this.flashSkillSlot(0);
     } else if (slot === 1) {
       if (p.skillCd > 0) return;
@@ -1013,7 +1064,7 @@ export class Game {
       this.sfx.playSkill("primary");
       this.castPrimary();
       p.skillCd = c.skillCd * this.skillCdMult();
-      addFlash(this, themeFor(c).glow, 0.14);
+      addFlash(this, themeFor(c).glow, 0.18);
       this.flashSkillSlot(1);
     } else {
       if (p.skill2Cd > 0) return;
@@ -1678,6 +1729,15 @@ export class Game {
     if (this.invuln > 0) this.invuln -= dt;
     if (this.smokeTimer > 0) this.smokeTimer -= dt;
 
+    this.timeLeft -= dt;
+    tickCombo(this.scoreState, dt);
+    if (this.scorePopTimer > 0) this.scorePopTimer -= dt;
+    if (this.timeLeft <= 0) {
+      this.timeLeft = 0;
+      this.endRun("time");
+      return;
+    }
+
     this.updatePickups(dt);
 
     if (AUTO_ATTACK_ENABLED) this.autoAttack(dt);
@@ -1757,11 +1817,8 @@ export class Game {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i];
       if (e.hp <= 0) {
-        const def = ENEMIES[e.type];
         this.tryDropLoot(e);
-        this.sfx.playKill();
-        spawnBurst(this, e.x, e.y, def?.glow || e.color, e.type === "boss");
-        if (e.type === "boss") addShake(this, 6);
+        this.onEnemyKilled(e);
         this.enemies.splice(i, 1);
         continue;
       }
@@ -1769,13 +1826,8 @@ export class Game {
       this.updateEnemyAI(e, dt);
     }
 
-    if (!this.spawnQueue.length && this.enemies.length === 0 && this.spawnTimer > 1.5) {
-      if (this.wave >= WAVE_COUNT) {
-        this.win();
-        return;
-      }
-      this.lastWaveClearHeal = this.applyWaveClearHeal();
-      this.prepareWave();
+    if (!this.spawnQueue.length && this.enemies.length === 0 && this.spawnTimer > 0.45) {
+      this.startNextWave(true);
       return;
     }
   }
@@ -1830,26 +1882,54 @@ export class Game {
   }
 
   updateHud() {
-    this.ui.waveNum.textContent = `${Math.max(this.wave, 1)} / ${WAVE_COUNT}`;
+    const score = this.scoreState?.total ?? 0;
+    const scoreLabel = formatScore(score);
+    if (this.ui.scoreNum) {
+      if (this.hudCache.score !== scoreLabel) {
+        this.hudCache.score = scoreLabel;
+        this.ui.scoreNum.textContent = scoreLabel;
+      }
+      this.ui.scoreNum.classList.toggle("score-pop", this.scorePopTimer > 0);
+    }
+
+    const timeLabel = formatTime(this.timeLeft ?? 0);
+    if (this.ui.timeNum) {
+      if (this.hudCache.time !== timeLabel) {
+        this.hudCache.time = timeLabel;
+        this.ui.timeNum.textContent = timeLabel;
+      }
+      const urgency = timeUrgency(this.timeLeft ?? 0);
+      this.ui.timeNum.classList.toggle("time-warn", urgency === "warn");
+      this.ui.timeNum.classList.toggle("time-critical", urgency === "critical");
+    }
+
+    const combo = this.scoreState?.combo ?? 0;
+    const comboLabel = `×${combo}`;
+    if (this.ui.comboNum) {
+      if (this.hudCache.combo !== comboLabel) {
+        this.hudCache.combo = comboLabel;
+        this.ui.comboNum.textContent = comboLabel;
+      }
+      this.ui.comboNum.classList.toggle("combo-hot", combo >= COMBO_MILESTONE);
+    }
 
     const parts = [];
-    if (this.pendingComposition && this.state === "scout") {
-      parts.push(`다음 ${summarizeComposition(this.pendingComposition)}`);
-    }
     if (this.event) parts.push(this.event.name);
+    if (this.champion && this.state === "combat") parts.push(this.champion.name);
+    parts.push(`웨이브 ${Math.max(this.wave, 1)}`);
     if (this.runAugments.length) {
-      const names = this.runAugments.map((a) => a.name).join(" · ");
-      parts.push(`증강 ${this.runAugments.length}/${WAVE_COUNT}: ${names}`);
-    }
-    if (this.champion && this.state === "combat") {
-      parts.push(this.champion.name);
+      parts.push(`증강 ${this.runAugments.length}`);
     }
     const tempLoot = formatTempBuffs(this.waveTempBuff);
     if (tempLoot) parts.push(`아이템 ${tempLoot}`);
     const waveInfo = parts.join(" · ") || "—";
-    if (this.hudCache.waveInfo !== waveInfo) {
+    if (this.ui.waveInfo && this.hudCache.waveInfo !== waveInfo) {
       this.hudCache.waveInfo = waveInfo;
       this.ui.waveInfo.textContent = waveInfo;
+    }
+
+    if (this.state === "combat") {
+      this.message = `${formatScore(score)} pt · ${formatTime(this.timeLeft ?? 0)} · W${Math.max(this.wave, 1)}`;
     }
 
     if (!this.player || this.state !== "combat") return;
@@ -1997,7 +2077,7 @@ export class Game {
     if (!show) return;
 
     if (countEl) {
-      countEl.textContent = `${this.runAugments.length} / ${WAVE_COUNT}`;
+      countEl.textContent = `증강 ${this.runAugments.length}`;
     }
 
     chipsEl.innerHTML = "";

@@ -68,14 +68,14 @@ class GameSfx {
   playHit(slot = "j", big = false) {
     if (!this.ensure()) return;
     const now = performance.now();
-    const gap = slot === "j" ? 28 : slot === "k" ? 42 : 38;
+    const gap = slot === "j" ? 22 : slot === "k" ? 36 : 32;
     if (now - this.lastHit < gap) return;
     this.lastHit = now;
 
     this.hitPitch = (this.hitPitch + 1) % 5;
     const step = this.hitPitch * 20;
     const when = this.t();
-    const vol = big ? 0.42 : slot === "k" ? 0.32 : slot === "l" ? 0.3 : 0.28;
+    const vol = big ? 0.48 : slot === "k" ? 0.36 : slot === "l" ? 0.34 : 0.32;
 
     if (slot === "j") {
       this.thump(260 + step, vol, 0.06, when);
