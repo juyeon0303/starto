@@ -82,6 +82,7 @@ export function addFx(game, fx) {
 export function updateFx(game, dt) {
   if (!game.fx) return;
   game.fx = game.fx.filter((f) => {
+    if (f.kind === "afterimage") return false;
     f.t -= dt;
     if (!Number.isFinite(f.t)) return false;
     return f.t > 0;
@@ -855,7 +856,8 @@ function drawChampWeapons(ctx, champId, time, color, glow) {
   ctx.restore();
 }
 
-export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
+export function drawChampPlayer(ctx, p, champ, time, invuln, smoke, opts = {}) {
+  const solid = opts.solid ?? false;
   const id = champ?.id || "blade";
   const t = themeFor(champ);
   const bob = Math.sin(time * 8) * 1.2;
@@ -863,6 +865,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   ctx.save();
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
+  ctx.shadowBlur = 0;
   ctx.translate(p.x, p.y);
   ctx.translate(0, bob);
 
@@ -885,7 +888,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
 
-  if (invuln > 0) {
+  if (!solid && invuln > 0) {
     ctx.strokeStyle = id === "guardian" ? t.glow : "#ffd166";
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.5 + Math.sin(time * 14) * 0.3;
@@ -895,7 +898,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
     ctx.globalAlpha = 1;
   }
 
-  if (smoke > 0 && id === "rogue") {
+  if (!solid && smoke > 0 && id === "rogue") {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.55, smoke * 0.5);
     ctx.fillStyle = "#455a64";
@@ -909,7 +912,7 @@ export function drawChampPlayer(ctx, p, champ, time, invuln, smoke) {
     ctx.arc(0, 0, smokeR + 8, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
-  } else if (smoke > 0) {
+  } else if (!solid && smoke > 0) {
     const smokeR = 38 + (1 - smoke / 0.75) * 28;
     ctx.globalAlpha = Math.min(0.45, smoke * 0.4);
     ctx.fillStyle = "#78909c";

@@ -22,6 +22,7 @@ import {
   updateVfx,
   clearTransientVfx,
   renderFrame,
+  resetDrawState,
   spawnBurst,
   addShake,
   addFlash,
@@ -532,6 +533,7 @@ export class Game {
     this.wave += 1;
     this.state = "scout";
     clearTransientVfx(this);
+    resetDrawState(this.ctx);
     this.invuln = 0;
     this.smokeTimer = 0;
     this.paused = false;
@@ -638,6 +640,7 @@ export class Game {
     document.body.classList.remove("game-paused");
     this.state = "combat";
     clearTransientVfx(this);
+    resetDrawState(this.ctx);
     this.invuln = 0;
     this.smokeTimer = 0;
     this.enemies = [];

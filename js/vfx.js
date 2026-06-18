@@ -201,13 +201,57 @@ function drawLayerList(ctx, layers) {
   }
 }
 
+function drawEnemyBody(ctx, game, e) {
+  const lift = entityLift(e.radius);
+  drawGroundShadow(ctx, e.x, e.y, e.radius);
+  const body = worldToScreen(e.x, e.y, lift);
+  ctx.save();
+  resetDrawState(ctx);
+  ctx.translate(body.x, body.y);
+  ctx.scale(1.18, 1.18);
+  drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true, solid: true });
+  ctx.restore();
+  resetDrawState(ctx);
+}
+
+function drawPlayerBody(ctx, game, solid = false) {
+  const p = game.player;
+  if (!p) return;
+  const lift = entityLift(p.radius);
+  drawGroundShadow(ctx, p.x, p.y, p.radius);
+  const body = worldToScreen(p.x, p.y, lift);
+  ctx.save();
+  resetDrawState(ctx);
+  ctx.translate(Math.round(body.x), Math.round(body.y));
+  ctx.scale(1.14, 1.14);
+  drawChampPlayer(
+    ctx,
+    { ...p, x: 0, y: 0 },
+    game.champion,
+    game.bgTime,
+    solid ? 0 : game.invuln,
+    solid ? 0 : game.smokeTimer,
+    { solid }
+  );
+  ctx.restore();
+  resetDrawState(ctx);
+}
+
+/** 스킬 FX·데미지 텍스트 위에 캐릭터/몬스터를 다시 그려 유령처럼 보이는 현상 방지 */
+function drawOpaqueEntityOverlay(ctx, game) {
+  if (game.state !== "combat" && game.state !== "scout") return;
+  resetDrawState(ctx);
+
+  game.enemies.forEach((e) => drawEnemyBody(ctx, game, e));
+  if (shouldDrawPlayer(game)) {
+    drawPlayerBody(ctx, game, game.state === "combat");
+  }
+}
+
 export function renderFrame(game, ctx) {
   const dpr = game.dpr || 1;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.globalAlpha = 1;
-  ctx.globalCompositeOperation = "source-over";
-  ctx.shadowBlur = 0;
-  ctx.setLineDash([]);
+  resetDrawState(ctx);
   ctx.clearRect(0, 0, W, H);
 
   const shake = game.shake || 0;
@@ -221,9 +265,6 @@ export function renderFrame(game, ctx) {
   drawIsoPlatform(ctx, game.bgTime);
   darkenOutsideArena(ctx);
   drawAmbientParticlesIso(ctx, game);
-  if (game.state === "combat" && game.player) {
-    drawBasicRangeIndicator(ctx, game);
-  }
 
   const groundLayers = [];
   const entityLayers = [];
@@ -286,17 +327,19 @@ export function renderFrame(game, ctx) {
     pushGround(fx.x, fx.y, 6, () => drawParticleIso(ctx, fx))
   );
 
+  if (game.state === "combat" && game.player) {
+    pushGround(
+      game.player.x,
+      game.player.y,
+      entityLift(game.player.radius) * 0.2,
+      () => drawBasicRangeIndicator(ctx, game),
+      -0.35
+    );
+  }
+
   game.enemies.forEach((e) => {
     const lift = entityLift(e.radius);
-    pushEntity(e.x, e.y, lift, () => {
-      drawGroundShadow(ctx, e.x, e.y, e.radius);
-      const body = worldToScreen(e.x, e.y, lift);
-      ctx.save();
-      ctx.translate(body.x, body.y);
-      ctx.scale(1.18, 1.18);
-      drawEnemyArt(ctx, e, game.bgTime, { atOrigin: true });
-      ctx.restore();
-    });
+    pushEntity(e.x, e.y, lift, () => drawEnemyBody(ctx, game, e));
     pushEntity(e.x, e.y, lift + 34, () => {
       const hp = worldToScreen(e.x, e.y, lift + 36);
       const pct = e.hp / e.maxHp;
@@ -316,15 +359,7 @@ export function renderFrame(game, ctx) {
     const p = game.player;
     const th = themeFor(game.champion);
     const lift = entityLift(p.radius);
-    pushEntity(p.x, p.y, lift, () => {
-      drawGroundShadow(ctx, p.x, p.y, p.radius);
-      const body = worldToScreen(p.x, p.y, lift);
-      ctx.save();
-      ctx.translate(Math.round(body.x), Math.round(body.y));
-      ctx.scale(1.14, 1.14);
-      drawChampPlayer(ctx, { ...p, x: 0, y: 0 }, game.champion, game.bgTime, game.invuln, game.smokeTimer);
-      ctx.restore();
-    }, 0.015);
+    pushEntity(p.x, p.y, lift, () => drawPlayerBody(ctx, game, false), 0.015);
     if (game.state === "combat") {
       pushEntity(p.x, p.y, lift + 40, () => {
         const hp = worldToScreen(p.x, p.y, lift + 42);
@@ -373,6 +408,7 @@ export function renderFrame(game, ctx) {
 
   drawArenaBorderIso(ctx, game.bgTime);
   drawTopBannerIso(ctx, game);
+  drawOpaqueEntityOverlay(ctx, game);
 
   ctx.restore();
 
