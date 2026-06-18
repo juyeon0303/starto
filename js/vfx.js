@@ -129,6 +129,16 @@ export function resetDrawState(ctx) {
   ctx.filter = "none";
 }
 
+/** clip 누수 시에도 엔티티가 잘리지 않도록 캔버스 상태 복구 */
+function resetCanvasClip(ctx) {
+  if (typeof ctx.reset === "function") {
+    const t = ctx.getTransform();
+    ctx.reset();
+    ctx.setTransform(t);
+  }
+  resetDrawState(ctx);
+}
+
 function shouldDrawPlayer(game) {
   return !!game.player && (game.state === "combat" || game.state === "scout");
 }
@@ -188,7 +198,7 @@ export function updateVfx(game, dt) {
 }
 
 function drawLayerList(ctx, layers) {
-  layers.sort((a, b) => a.depth - b.depth);
+  layers.sort((a, b) => a.depth - b.depth || a.order - b.order);
   for (const l of layers) {
     ctx.save();
     try {
@@ -240,6 +250,7 @@ function drawPlayerBody(ctx, game, solid = false) {
 /** 스킬 FX·데미지 텍스트 위에 캐릭터/몬스터를 다시 그려 유령처럼 보이는 현상 방지 */
 function drawOpaqueEntityOverlay(ctx, game) {
   if (game.state !== "combat" && game.state !== "scout") return;
+  resetCanvasClip(ctx);
   resetDrawState(ctx);
 
   game.enemies.forEach((e) => drawEnemyBody(ctx, game, e));
@@ -268,11 +279,20 @@ export function renderFrame(game, ctx) {
 
   const groundLayers = [];
   const entityLayers = [];
+  let layerOrder = 0;
   const pushGround = (wx, wy, lift, draw, bias = 0) => {
-    groundLayers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
+    groundLayers.push({
+      depth: worldToScreen(wx, wy, lift).depth + bias,
+      order: layerOrder++,
+      draw,
+    });
   };
   const pushEntity = (wx, wy, lift, draw, bias = 0) => {
-    entityLayers.push({ depth: worldToScreen(wx, wy, lift).depth + bias, draw });
+    entityLayers.push({
+      depth: worldToScreen(wx, wy, lift).depth + bias,
+      order: layerOrder++,
+      draw,
+    });
   };
 
   game.traps.forEach((t) => pushGround(t.x, t.y, 0, () => drawTrapIso(ctx, t, game.bgTime), -0.5));
@@ -392,6 +412,7 @@ export function renderFrame(game, ctx) {
     drawFx(ctx, game);
   }
   resetDrawState(ctx);
+  resetCanvasClip(ctx);
   drawLayerList(ctx, entityLayers);
 
   game.floatTexts.forEach((f) => {
@@ -408,7 +429,6 @@ export function renderFrame(game, ctx) {
 
   drawArenaBorderIso(ctx, game.bgTime);
   drawTopBannerIso(ctx, game);
-  drawOpaqueEntityOverlay(ctx, game);
 
   ctx.restore();
 
@@ -418,6 +438,11 @@ export function renderFrame(game, ctx) {
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
   }
+
+  ctx.save();
+  ctx.translate(sx, sy);
+  drawOpaqueEntityOverlay(ctx, game);
+  ctx.restore();
 }
 
 function drawBasicRangeIndicator(ctx, game) {
@@ -562,9 +587,10 @@ function drawArenaBg(ctx, time, eventId) {
   drawArenaPillarsIso(ctx, time);
 }
 
-/** 아레나 밖(캔버스 모서리) 밝기 편차 제거 */
+/** 아레나 밖(캔버스 모서리) 밝기 편차 제거 — entityLift 만큼 구멍 확장 */
 function darkenOutsideArena(ctx) {
-  const corners = arenaCornersWorld().map(([x, y]) => worldToScreen(x, y, 0));
+  const margin = entityLift(22);
+  const corners = arenaCornersWorld().map(([x, y]) => worldToScreen(x, y, -margin));
   ctx.save();
   ctx.fillStyle = "rgba(4, 7, 14, 0.88)";
   ctx.beginPath();
@@ -639,14 +665,8 @@ function drawIsoPlatform(ctx, time) {
 
   if (arenaImgReady) {
     ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(tl.x, tl.y);
-    ctx.lineTo(tr.x, tr.y);
-    ctx.lineTo(br.x, br.y);
-    ctx.lineTo(bl.x, bl.y);
-    ctx.closePath();
-    ctx.clip();
     ctx.globalAlpha = 0.18;
+    // clip() 사용 시 entityLift로 화면 밖으로 나간 캐릭터/몬스터가 특정 위치에서 잘림
     ctx.drawImage(ARENA_IMG, tl.x, tl.y - 20, tr.x - tl.x + 40, br.y - tl.y + 40);
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -917,23 +937,24 @@ function drawArenaBorderIso(ctx, time) {
 }
 
 function drawTopBannerIso(ctx, game) {
-  const anchor = worldToScreen(PAD + 20, PAD + 12, 0);
+  const left = PAD + 20;
+  const top = PAD + 12;
   ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
-  ctx.fillRect(anchor.x, anchor.y, 340, 32);
+  ctx.fillRect(left, top, 340, 32);
   ctx.font = "600 13px Syne, Malgun Gothic, sans-serif";
   ctx.fillStyle = "#c8d6e5";
-  ctx.fillText(game.message || "", anchor.x + 10, anchor.y + 21);
+  ctx.fillText(game.message || "", left + 10, top + 21);
 
   if (game.runAugments?.length && game.state === "combat") {
-    const right = worldToScreen(W - PAD - 20, PAD + 12, 0);
+    const right = W - PAD - 20;
     ctx.textAlign = "right";
     ctx.fillStyle = "#ffd166";
     ctx.font = "600 12px Syne, Malgun Gothic, sans-serif";
     const last = game.runAugments[game.runAugments.length - 1];
     ctx.fillText(
       `◆ 증강 ${game.runAugments.length}/${8} · ${last.icon}${last.name}`,
-      right.x,
-      right.y + 21
+      right,
+      top + 21
     );
     ctx.textAlign = "left";
   }
